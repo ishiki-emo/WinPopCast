@@ -19,14 +19,18 @@ internal struct MSG
     public int ptX, ptY;
 }
 
-[StructLayout(LayoutKind.Sequential)]
-internal struct MONITORINFO
+[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+internal struct MONITORINFOEX
 {
     public int cbSize;
     public RECT rcMonitor;
     public RECT rcWork;
     public uint dwFlags;
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+    public string szDevice;
 }
+
+internal delegate bool MonitorEnumProc(nint hMonitor, nint hdc, nint lprcMonitor, nint dwData);
 
 internal delegate bool EnumWindowsProc(nint hwnd, nint lParam);
 
@@ -94,9 +98,13 @@ internal static partial class User32
     [DllImport("user32.dll")]
     public static extern nint MonitorFromWindow(nint hwnd, uint dwFlags);
 
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool GetMonitorInfoW(nint hMonitor, ref MONITORINFOEX lpmi);
+
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool GetMonitorInfoW(nint hMonitor, ref MONITORINFO lpmi);
+    public static extern bool EnumDisplayMonitors(nint hdc, nint lprcClip, MonitorEnumProc lpfnEnum, nint dwData);
 
     [DllImport("user32.dll")]
     public static extern nint SetWinEventHook(
@@ -125,6 +133,14 @@ internal static partial class User32
     [DllImport("user32.dll")]
     public static extern uint MsgWaitForMultipleObjectsEx(
         uint nCount, nint pHandles, uint dwMilliseconds, uint dwWakeMask, uint dwFlags);
+}
+
+internal static class Shcore
+{
+    public const int MDT_EFFECTIVE_DPI = 0;
+
+    [DllImport("shcore.dll")]
+    public static extern int GetDpiForMonitor(nint hmonitor, int dpiType, out uint dpiX, out uint dpiY);
 }
 
 internal static class Kernel32

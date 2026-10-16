@@ -73,6 +73,11 @@ public sealed class WindowSnapshot
 
     public IReadOnlyCollection<int> TargetProcessIds { get; }
 
+    /// <summary>メインウィンドウ = 対象プロセスの、owner を持たない非ツールウィンドウのうち最大のもの</summary>
+    public TrackedWindow? FindMainWindow() =>
+        Windows.Where(w => w.Owner == 0 && !w.IsToolWindow && w.Reason == MatchReason.TargetProcess)
+            .MaxBy(w => (long)w.Bounds.Width * w.Bounds.Height);
+
     public bool ContentEquals(WindowSnapshot other)
     {
         if (Windows.Count != other.Windows.Count) return false;

@@ -7,7 +7,7 @@ using AppCapture.Core.Timing;
 using AppCapture.Core.Tracking;
 using AppCapture.Spout;
 
-// M3: 対象プロセスの全ウィンドウを WGC でキャプチャし、モニター範囲のキャンバスに Z 順で合成して Spout2 で送信する
+// 対象プロセスの全ウィンドウを WGC でキャプチャし、キャンバス（既定はメインウィンドウのモニター）に Z 順で合成して Spout2 で送信する
 
 Console.OutputEncoding = Encoding.UTF8;
 
@@ -16,6 +16,7 @@ string senderName = "AppCapture";
 int fps = 60;
 bool verbose = false;
 string? measurePath = null; // M4: ウィンドウごとの開始遅延を TSV に書く
+var canvasSpec = CanvasSpec.Default;
 string? dumpPath = null; // デバッグ: 起動 3 秒後の合成結果を PNG に保存
 
 for (int i = 0; i < args.Length; i++)
@@ -29,12 +30,22 @@ for (int i = 0; i < args.Length; i++)
         case "--verbose" or "-v": verbose = true; break;
         case "--dump": dumpPath = Next(); break;
         case "--measure": measurePath = Next(); break;
+        case "--canvas": canvasSpec = CanvasSpec.Parse(Next()); break;
+        case "--monitors": PrintMonitors(); return 0;
         default: Console.Error.WriteLine($"不明な引数: {args[i]}"); return 1;
     }
 }
 if (processName is null)
 {
-    Console.WriteLine("使い方: AppCapture.Cli --process <名前> [--sender AppCapture] [--fps 60] [--verbose]");
+    Console.WriteLine("""
+        使い方: AppCapture.Cli --process <名前> [オプション]
+          --sender <名前>    Spout の送信者名（既定: AppCapture）
+          --fps <30|60>      出力フレームレート（既定: 60）
+          --canvas <指定>    auto（メインウィンドウのモニター、既定） / virtual（全モニター） / window（メインウィンドウの矩形）
+                             / primary / モニター番号（1〜） / デバイス名（\\.\DISPLAY2 など）
+          --monitors         モニターの一覧を表示
+          -v, --verbose      ウィンドウごとのキャプチャ開始などを表示
+        """);
     return 1;
 }
 
@@ -113,14 +124,11 @@ tracker.Start();
 var exit = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) => { e.Cancel = true; exit.Cancel(); };
 
-// キャンバス = メインウィンドウ（owner なし・非ツールで最大のもの）があるモニター。M5 で選択式にする
-static TrackedWindow? PickMain(WindowSnapshot s) =>
-    s.Windows.Where(w => w.Owner == 0 && !w.IsToolWindow && w.Reason == MatchReason.TargetProcess)
-        .MaxBy(w => (long)w.Bounds.Width * w.Bounds.Height);
-
+var canvasSelector = new CanvasSelector(canvasSpec);
 using var pacer = new FramePacer(fps);
 var layers = new List<Layer>();
 RectI canvas = default;
+bool monitorMissing = false;
 long sent = 0, lastSent = 0, lastStats = Stopwatch.GetTimestamp();
 double renderMsTotal = 0;
 
@@ -129,10 +137,17 @@ while (!exit.IsCancellationRequested)
     pacer.Wait();
     var snapshot = tracker.Current;
 
-    if (PickMain(snapshot) is { } main && Monitors.GetBounds(main.Monitor) is { } mon && mon != canvas)
+    var next = canvasSelector.Resolve(snapshot);
+    if (canvasSelector.MonitorMissing != monitorMissing)
     {
-        canvas = mon;
-        Log($"canvas {canvas} (main: {Describe(main)})");
+        monitorMissing = canvasSelector.MonitorMissing;
+        if (monitorMissing) Log($"モニター '{canvasSpec.Monitor}' が見つからないため、メインウィンドウのモニターを使います");
+    }
+    if (next != canvas)
+    {
+        canvas = next;
+        var main = snapshot.FindMainWindow();
+        Log($"canvas {canvas} [{canvasSpec}]" + (main is null ? "" : $" (main: {Describe(main)})"));
     }
     if (canvas.IsEmpty) continue;
 
@@ -174,6 +189,17 @@ while (!exit.IsCancellationRequested)
 }
 
 return 0;
+
+static void PrintMonitors()
+{
+    var all = Monitors.GetAll();
+    for (int i = 0; i < all.Count; i++)
+    {
+        var m = all[i];
+        Console.WriteLine($"  {i + 1}: {m.DeviceName,-14} {m.Bounds} dpi={m.Dpi} ({m.Scale:P0}){(m.IsPrimary ? " primary" : "")}");
+    }
+    Console.WriteLine($"  virtual: {Monitors.VirtualDesktop(all)}");
+}
 
 sealed class WindowRecord(TrackedWindow window, long appearTimestamp)
 {
