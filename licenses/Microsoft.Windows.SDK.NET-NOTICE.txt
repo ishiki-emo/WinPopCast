@@ -1,0 +1,12 @@
+Microsoft.Windows.SDK.NET.dll / WinRT.Runtime.dll
+（NuGet パッケージ Microsoft.Windows.SDK.NET.Ref 10.0.22621.57 に含まれる、Windows Runtime API を .NET から使うための投影アセンブリ）
+
+これらのファイルは Microsoft Corporation の著作物で、WinPopCast の MIT ライセンスの対象ではありません。
+Windows SDK のライセンス条項（Distributable Code）に基づき、WinPopCast の一部として再配布しています。
+利用には同条項が適用されます。
+
+  © Microsoft Corporation. All rights reserved.
+  ライセンス条項: https://aka.ms/WinSDKLicenseURL
+  第三者の表記: https://aka.ms/thirdpartynotices
+
+WinRT.Runtime は C#/WinRT プロジェクト（https://github.com/microsoft/CsWinRT、MIT License）の成果物でもあります。

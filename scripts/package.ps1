@@ -44,11 +44,34 @@ if ($LASTEXITCODE) { throw "dotnet publish failed" }
 
 Copy-Item README.md, LICENSE, THIRD-PARTY-NOTICES.md $publishDir
 
+Write-Host "== licenses ==" -ForegroundColor Cyan
+$licDir = Join-Path $publishDir "licenses"
+New-Item -ItemType Directory -Force $licDir | Out-Null
+Copy-Item licenses/* $licDir
+# Spout2 の原文は、実際にビルドに使ったソースから取る
+Copy-Item "$nativeBuild/_deps/spout2-src/LICENSE" (Join-Path $licDir "Spout2-LICENSE-original.txt")
+
+if (-not $FrameworkDependent) {
+    # 自己完結版は .NET ランタイムを同梱するので、実際に同梱したバージョンのライセンスと第三者表記を入れる
+    $rtVersion = (dotnet msbuild src/WinPopCast.App/WinPopCast.App.csproj -getProperty:BundledNETCoreAppPackageVersion).Trim()
+    $nuget = if ($env:NUGET_PACKAGES) { $env:NUGET_PACKAGES } else { Join-Path $env:USERPROFILE ".nuget/packages" }
+    $core = Join-Path $nuget "microsoft.netcore.app.runtime.win-x64/$rtVersion"
+    $desktop = Join-Path $nuget "microsoft.windowsdesktop.app.runtime.win-x64/$rtVersion"
+    foreach ($f in @(@("$core/LICENSE.TXT", "dotnet-LICENSE.txt"),
+                     @("$core/THIRD-PARTY-NOTICES.TXT", "dotnet-THIRD-PARTY-NOTICES.txt"),
+                     @("$desktop/LICENSE", "windowsdesktop-LICENSE.txt"))) {
+        if (-not (Test-Path $f[0])) { throw "ランタイムのライセンスが見つかりません: $($f[0])" }
+        Copy-Item $f[0] (Join-Path $licDir $f[1])
+    }
+    "$rtVersion" | Set-Content (Join-Path $licDir "dotnet-VERSION.txt")
+}
+
 # 単一 exe にまとめきれなかったファイルが出ていないか確認する
 $extra = Get-ChildItem $publishDir -File | Where-Object { $_.Name -notin @("WinPopCast.exe", "README.md", "LICENSE", "THIRD-PARTY-NOTICES.md") }
 if ($extra) { Write-Warning "単一 exe 以外のファイルがあります: $($extra.Name -join ', ')" }
 
 if (Test-Path $zipPath) { Remove-Item $zipPath }
 Compress-Archive -Path "$publishDir/*" -DestinationPath $zipPath
+Get-ChildItem $licDir | ForEach-Object { Write-Host "  licenses/$($_.Name)" }
 $size = (Get-Item "$publishDir/WinPopCast.exe").Length / 1MB
 Write-Host ("done: {0} (WinPopCast.exe {1:F1} MB)" -f $zipPath, $size) -ForegroundColor Green

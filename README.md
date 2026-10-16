@@ -97,4 +97,10 @@ pwsh scripts/package.ps1
 
 ## ライセンス
 
-[MIT License](LICENSE) です。同梱しているサードパーティーのソフトウェアについては [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) を参照してください。
+WinPopCast 自身のソースコードは [MIT License](LICENSE) です。
+
+配布している実行ファイルには、Spout2 SDK（BSD 2-Clause）、Vortice.Windows（MIT）、Microsoft の Windows SDK の投影アセンブリ（Windows SDK ライセンス）、.NET ランタイム（MIT）などの第三者のソフトウェアが含まれ、それぞれのライセンスが適用されます。一覧は [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) に、各ライセンスの原文は配布 zip の `licenses/` フォルダーにあります。アプリのトレイメニューの「バージョン情報とライセンス」からも確認できます。
+
+## 商標
+
+本文中の会社名・製品名（Windows、Unity、OBS Studio、CLIP STUDIO PAINT、Cubase、Spout など）は、各社・各権利者の商標または登録商標です。WinPopCast はこれらの企業・団体とは関係がなく、承認や支援を受けたものではありません。

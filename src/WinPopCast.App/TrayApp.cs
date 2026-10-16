@@ -55,6 +55,7 @@ internal sealed class TrayApp : ApplicationContext
         menu.Items.Add("設定を開く", null, (_, _) => ShowSettings());
         menu.Items.Add(_toggle);
         menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add("バージョン情報とライセンス", null, (_, _) => AboutBox.Show());
         menu.Items.Add("終了", null, (_, _) => ExitThread());
 
         _tray = new NotifyIcon
