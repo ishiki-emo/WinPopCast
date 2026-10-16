@@ -1,0 +1,34 @@
+name: build
+
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Package
+        shell: pwsh
+        run: ./scripts/package.ps1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AppCapture-win-x64
+          path: artifacts/*.zip
+
+      - name: Release (tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*.zip
+          draft: true

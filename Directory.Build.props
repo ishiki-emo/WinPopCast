@@ -10,5 +10,10 @@
     <Platforms>x64</Platforms>
     <PlatformTarget>x64</PlatformTarget>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+
+    <Version>0.1.0</Version>
+    <Product>AppCapture</Product>
+    <Authors>ishiki-emo</Authors>
+    <Description>指定したアプリのウィンドウだけを合成して Spout2 で送るキャプチャツール</Description>
   </PropertyGroup>
 </Project>
