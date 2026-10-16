@@ -79,6 +79,10 @@ public sealed class WindowTracker : IDisposable
     /// <summary>対象PID集合が変わったとき（起動・終了・再起動の検知）</summary>
     public event Action<IReadOnlyCollection<int>>? TargetProcessesChanged;
 
+    /// <summary>トラッカーのループが最後に回った時刻（Stopwatch）。止まっていないかの見張りに使う</summary>
+    public long LastHeartbeat => Volatile.Read(ref _lastHeartbeat);
+    private long _lastHeartbeat = Stopwatch.GetTimestamp();
+
     /// <summary>追跡中に例外が起きたとき（トラッカーは止まらずに続行する）</summary>
     public event Action<Exception>? Error;
 
@@ -175,6 +179,7 @@ public sealed class WindowTracker : IDisposable
         while (!_stopping)
         {
             long now = Stopwatch.GetTimestamp();
+            Volatile.Write(ref _lastHeartbeat, now);
             try
             {
                 if (now >= _nextProcessRescan) RefreshTargetProcesses(now);

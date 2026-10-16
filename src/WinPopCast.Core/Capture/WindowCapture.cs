@@ -34,11 +34,7 @@ public sealed class WindowCapture : IDisposable
         _pool = Direct3D11CaptureFramePool.CreateFreeThreaded(
             d3d.WinRTDevice, DirectXPixelFormat.B8G8R8A8UIntNormalized, 2, _poolSize);
         _pool.FrameArrived += OnFrameArrived;
-        _item.Closed += (_, _) =>
-        {
-            try { Closed?.Invoke(this); }
-            catch (Exception ex) { try { Error?.Invoke(this, ex); } catch { } }
-        };
+        _item.Closed += OnItemClosed;
 
         _session = _pool.CreateCaptureSession(_item);
         _session.IsCursorCaptureEnabled = false;
@@ -46,6 +42,18 @@ public sealed class WindowCapture : IDisposable
         _session.StartCapture();
         StartedTimestamp = Stopwatch.GetTimestamp();
     }
+
+    private void OnItemClosed(GraphicsCaptureItem sender, object args)
+    {
+        try { Closed?.Invoke(this); }
+        catch (Exception ex) { try { Error?.Invoke(this, ex); } catch { } }
+    }
+
+    /// <summary>
+    /// 動作確認用：Dispose がセッションを閉じる直前で戻らなくなる（GraphicsCaptureSession.Close が
+    /// 返ってこない状況の再現）。本番では使わない
+    /// </summary>
+    public static bool SimulateHungDispose { get; set; }
 
     /// <summary>黄色い枠を消せる環境か（Windows 11 以降）</summary>
     public static bool IsBorderOptional { get; } =
@@ -167,7 +175,10 @@ public sealed class WindowCapture : IDisposable
             if (_disposed) return;
             _disposed = true;
         }
+        // イベントを外してから閉じる（Microsoft の推奨する順序）
         _pool.FrameArrived -= OnFrameArrived;
+        _item.Closed -= OnItemClosed;
+        if (SimulateHungDispose) Thread.Sleep(Timeout.Infinite);
         _session.Dispose();
         _pool.Dispose();
         lock (_d3d.Lock)

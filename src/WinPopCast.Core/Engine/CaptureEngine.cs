@@ -38,7 +38,11 @@ public sealed record EngineStatus(
     double SendFps,
     double RenderMs,
     /// <summary>上限のフレームレート</summary>
-    int TargetFps);
+    int TargetFps,
+    /// <summary>ウィンドウの追跡が止まっている（3 秒以上応答がない）</summary>
+    bool TrackerStalled,
+    /// <summary>終了が戻らず見切ったキャプチャの数</summary>
+    int HungCaptureDisposals);
 
 /// <summary>プレビュー用の縮小フレーム（BGRA8、乗算済みアルファ）</summary>
 public sealed record PreviewFrame(byte[] Pixels, int Width, int Height);
@@ -161,7 +165,7 @@ public sealed class CaptureEngine : IDisposable
         RectI canvas = default;
         long sent = 0, lastSent = 0, lastStats = Stopwatch.GetTimestamp(), nextPreview = 0, lastSend = 0;
         int lastSignature = 0;
-        bool hasSent = false;
+        bool hasSent = false, stallReported = false;
         double renderMsTotal = 0;
 
         while (!_stopping)
@@ -231,10 +235,15 @@ public sealed class CaptureEngine : IDisposable
                         HandleDeviceLost(removed);
                         break;
                     }
+                    // 追跡が止まっていないか（ループは長くても 1 秒ごとに回る）
+                    bool trackerStalled = now - Tracker.LastHeartbeat > 3 * Stopwatch.Frequency;
+                    if (trackerStalled && !stallReported) RaiseError(new TimeoutException("ウィンドウの追跡が 3 秒以上応答していません"));
+                    stallReported = trackerStalled;
                     double sec = (now - lastStats) / (double)Stopwatch.Frequency;
                     long n = sent - lastSent;
                     Status = new EngineStatus(snapshot.TargetProcessIds, snapshot.Windows.Count, Captures.Count, canvas,
-                        _canvasSelector.MonitorMissing, n / sec, n > 0 ? renderMsTotal / n : 0, _fps);
+                        _canvasSelector.MonitorMissing, n / sec, n > 0 ? renderMsTotal / n : 0, _fps,
+                        trackerStalled, Captures.HungDisposals);
                     lastSent = sent; lastStats = now; renderMsTotal = 0;
                     StatusUpdated?.Invoke(Status);
                 }

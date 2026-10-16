@@ -274,6 +274,8 @@ public sealed class SettingsForm : Form
             text = $"送信中 '{settings.SenderName}'  更新 {s.SendFps:F0}/{s.TargetFps}fps  ウィンドウ {s.WindowCount}  キャンバス {s.Canvas.Width}x{s.Canvas.Height}" +
                 (s.CanvasMonitorMissing ? "（指定モニターが見つからないため自動）" : "");
         if (settings?.Include.Any(r => !r.IsValidInclude) == true) text += "\n※ 許可リストのうち、プロセス名がない行は無視しています";
+        if (s is { TrackerStalled: true }) text += "\n⚠ ウィンドウの追跡が止まっています。WinPopCast を再起動してください";
+        if (s is { HungCaptureDisposals: > 0 }) text += $"\n※ 終了が戻らなかったキャプチャ: {s.HungCaptureDisposals} 件（動作は続けています）";
         if (_controller.LastRecovery is { } rec) text += $"\nGPU のエラーから復帰しました（{rec:HH:mm:ss}、計 {_controller.RecoveryCount} 回）";
         if (_controller.LastWarning is { } warn) text += $"\n直近のエラー: {warn}";
         _status.Text = text;

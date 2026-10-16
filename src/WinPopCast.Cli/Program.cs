@@ -33,6 +33,7 @@ for (int i = 0; i < args.Length; i++)
         case "--measure": measurePath = Next(); break;
         case "--canvas": canvasSpec = CanvasSpec.Parse(Next()); break;
         case "--show-file-dialogs": showFileDialogs = true; break;
+        case "--test-hung-dispose": WindowCapture.SimulateHungDispose = true; break; // 動作確認用（非公開）
         case "--monitors": PrintMonitors(); return 0;
         default: Console.Error.WriteLine($"不明な引数: {args[i]}"); return 1;
     }
