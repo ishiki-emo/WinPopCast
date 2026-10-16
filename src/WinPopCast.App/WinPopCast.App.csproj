@@ -6,9 +6,13 @@
     <UseWindowsForms>true</UseWindowsForms>
     <!-- DPI 設定は manifest ではなく ApplicationHighDpiMode で行う（WinForms の推奨） -->
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <ApplicationIcon>..\..\assets\WinPopCast.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\WinPopCast.Core\WinPopCast.Core.csproj" />
     <ProjectReference Include="..\WinPopCast.Spout\WinPopCast.Spout.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Velopack" Version="1.2.161" />
   </ItemGroup>
 </Project>

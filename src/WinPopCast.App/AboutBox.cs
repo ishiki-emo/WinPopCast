@@ -26,6 +26,7 @@ internal static class AboutBox
               ・Spout2 SDK（BSD 2-Clause） © Lynn Jarvis
               ・Vortice.Windows / Vortice.Mathematics（MIT） © Amer Koleci and Contributors
               ・SharpGen.Runtime（MIT）
+              ・Velopack（MIT） © Velopack Ltd
               ・Microsoft.Windows.SDK.NET / WinRT.Runtime（Windows SDK ライセンス） © Microsoft Corporation
               ・.NET / Windows Forms（MIT） © .NET Foundation and Contributors
 

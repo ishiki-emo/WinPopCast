@@ -11,6 +11,7 @@ WinPopCast 自身のソースコードは [MIT License](LICENSE)（Copyright (c)
 | [Vortice.Windows](https://github.com/amerkoleci/Vortice.Windows)（Direct3D11 / DXGI / DirectX / D3DCompiler） | 3.8.3 | MIT | Direct3D 11 | `licenses/Vortice-LICENSE.txt` |
 | [Vortice.Mathematics](https://github.com/amerkoleci/Vortice.Mathematics) | 2.1.0 | MIT | 数学型 | `licenses/Vortice-LICENSE.txt` |
 | [SharpGen.Runtime](https://github.com/SharpGenTools/SharpGenTools) / .COM | 2.4.2-beta | MIT | COM 相互運用（Vortice の依存） | `licenses/SharpGen.Runtime-LICENSE.txt` |
+| [Velopack](https://github.com/velopack/velopack)（インストーラー版の更新機能と、インストーラー・Update.exe） | 1.2.161 | MIT | インストールと更新 | `licenses/Velopack-LICENSE.txt` |
 | Microsoft.Windows.SDK.NET / WinRT.Runtime（[C#/WinRT](https://github.com/microsoft/CsWinRT)） | 10.0.22621.57 | Windows SDK ライセンス（Distributable Code） | Windows.Graphics.Capture などの Windows Runtime API | `licenses/Microsoft.Windows.SDK.NET-NOTICE.txt` |
 | [.NET ランタイム](https://github.com/dotnet/runtime)（自己完結版のみ） | 配布 zip の表記を参照 | MIT（＋.NET が含む第三者コンポーネント） | ランタイム | `licenses/dotnet-LICENSE.txt`、`licenses/dotnet-THIRD-PARTY-NOTICES.txt` |
 | [Windows Forms / Windows Desktop ランタイム](https://github.com/dotnet/winforms)（自己完結版のみ） | 同上 | MIT | 設定画面・トレイ | `licenses/windowsdesktop-LICENSE.txt` |
@@ -59,10 +60,11 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 NuGet パッケージ Microsoft.Windows.SDK.NET.Ref に含まれるファイルを、[Windows SDK のライセンス条項](https://aka.ms/WinSDKLicenseURL)の Distributable Code の規定に基づいて再配布しています。
 これらの利用には同条項が適用されます。第三者の表記は https://aka.ms/thirdpartynotices を参照してください。
 
-## MIT License（Vortice.Windows / Vortice.Mathematics / SharpGen.Runtime / .NET / Windows Forms）
+## MIT License（Vortice.Windows / Vortice.Mathematics / SharpGen.Runtime / Velopack / .NET / Windows Forms）
 
 - Vortice.Windows, Vortice.Mathematics: Copyright (c) Amer Koleci and Contributors
 - SharpGen.Runtime: (c) 2010-2017 Alexandre Mutel, 2017-2023 Jeremy Koritzinsky, 2023-2024 Amer Koleci
+- Velopack: 下記の licenses/Velopack-LICENSE.txt を参照
 - .NET, Windows Forms: Copyright (c) .NET Foundation and Contributors
 
 ```

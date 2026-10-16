@@ -41,10 +41,13 @@ internal sealed class TrayApp : ApplicationContext
     private readonly NotifyIcon _tray;
     private readonly ToolStripMenuItem _toggle;
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = 1000 };
+    private readonly UpdateService _updates = new();
+    private readonly ToolStripMenuItem _updateItem;
+    private readonly System.Windows.Forms.Timer _updateTimer = new() { Interval = 10_000 }; // 最初は起動 10 秒後、以降 6 時間ごと
     private AppSettings _settings;
     private SettingsForm? _form;
 
-    public TrayApp(string settingsPath, bool showSettings, int testDeviceLostSeconds = 0)
+    public TrayApp(string settingsPath, bool showSettings, int testDeviceLostSeconds = 0, bool testUpdate = false)
     {
         _controller = new AppController();
         _settingsPath = settingsPath;
@@ -55,6 +58,16 @@ internal sealed class TrayApp : ApplicationContext
         menu.Items.Add("設定を開く", null, (_, _) => ShowSettings());
         menu.Items.Add(_toggle);
         menu.Items.Add(new ToolStripSeparator());
+        var autoStart = new ToolStripMenuItem("Windows の起動時に起動する") { Checked = AutoStart.IsEnabled, CheckOnClick = true };
+        autoStart.CheckedChanged += (_, _) =>
+        {
+            try { AutoStart.Set(autoStart.Checked); }
+            catch (Exception ex) { MessageBox.Show($"設定できませんでした: {ex.Message}", "WinPopCast", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+        };
+        menu.Items.Add(autoStart);
+        _updateItem = new ToolStripMenuItem("更新して再起動", null, async (_, _) => await ApplyUpdateAsync()) { Visible = false };
+        menu.Items.Add(_updateItem);
+        if (_updates.IsInstalled) menu.Items.Add("更新を確認", null, async (_, _) => await CheckUpdateManuallyAsync());
         menu.Items.Add("バージョン情報とライセンス", null, (_, _) => AboutBox.Show());
         menu.Items.Add("終了", null, (_, _) => ExitThread());
 
@@ -68,6 +81,13 @@ internal sealed class TrayApp : ApplicationContext
         _tray.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) ShowSettings(); };
 
         _controller.Apply(_settings);
+        _updates.UpdateAvailable += OnUpdateAvailable;
+        _updateTimer.Tick += async (_, _) =>
+        {
+            _updateTimer.Interval = (int)TimeSpan.FromHours(6).TotalMilliseconds;
+            await _updates.CheckAsync();
+        };
+        if (_updates.IsInstalled) _updateTimer.Start();
         _timer.Tick += (_, _) => UpdateTray();
         _timer.Start();
         UpdateTray();
@@ -79,8 +99,52 @@ internal sealed class TrayApp : ApplicationContext
             t.Start();
         }
 
+        if (testUpdate)
+        {
+            _updates.UpdateAvailable += async _ => await _updates.DownloadAndRestartAsync();
+            _ = _updates.CheckAsync();
+        }
+
         // 対象が未設定なら最初に設定画面を出す
         if (showSettings || string.IsNullOrWhiteSpace(_settings.ProcessName)) ShowSettings();
+    }
+
+    private void OnUpdateAvailable(string version)
+    {
+        _updateItem.Text = $"更新して再起動（{version}）";
+        _updateItem.Visible = true;
+        _tray.ShowBalloonTip(10_000, "WinPopCast", $"新しいバージョン {version} があります。配信していないときに、トレイのメニューから更新できます。", ToolTipIcon.Info);
+    }
+
+    private async Task CheckUpdateManuallyAsync()
+    {
+        await _updates.CheckAsync();
+        if (_updates.AvailableVersion is null)
+        {
+            string msg = _updates.LastError is { } err ? $"更新を確認できませんでした。\n{err}" : $"最新の版です（{_updates.CurrentVersion}）。";
+            MessageBox.Show(msg, "WinPopCast", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+    }
+
+    /// <summary>ユーザーが選んだときだけ更新する。再起動で数秒間送信が止まるので確認を出す</summary>
+    private async Task ApplyUpdateAsync()
+    {
+        var answer = MessageBox.Show(
+            $"WinPopCast を {_updates.AvailableVersion} に更新して再起動します。\n再起動のあいだ、数秒間 OBS への送信が止まります。\n\n配信中の場合は、配信が終わってから更新してください。更新しますか？",
+            "WinPopCast の更新", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+        if (answer != DialogResult.Yes) return;
+        try
+        {
+            _updateItem.Enabled = false;
+            _updateItem.Text = "更新をダウンロード中…";
+            await _updates.DownloadAndRestartAsync(p => _updateItem.Text = $"更新をダウンロード中… {p}%");
+        }
+        catch (Exception ex)
+        {
+            _updateItem.Enabled = true;
+            _updateItem.Text = $"更新して再起動（{_updates.AvailableVersion}）";
+            MessageBox.Show($"更新できませんでした。\n{ex.Message}", "WinPopCast", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
     }
 
     private void ShowSettings()
@@ -125,6 +189,7 @@ internal sealed class TrayApp : ApplicationContext
     protected override void ExitThreadCore()
     {
         _timer.Dispose();
+        _updateTimer.Dispose();
         _tray.Visible = false;
         _tray.Dispose();
         _form?.Dispose();
