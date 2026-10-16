@@ -38,6 +38,9 @@ public sealed class WindowTracker : IDisposable
     private readonly List<nint> _enumBuffer = new(512);
     private readonly char[] _textBuffer = new char[512];
     private readonly Dictionary<int, string?> _processNameCache = [];
+    private readonly Dictionary<nint, DialogState> _dialogs = [];
+    private readonly EnumWindowsProc _shellViewProc;
+    private bool _shellViewFound;
 
     private uint _threadId;
     private volatile bool _stopping;
@@ -55,6 +58,7 @@ public sealed class WindowTracker : IDisposable
         _include = options.Include.Where(r => r.IsValidInclude).ToList();
         _winEventProc = OnWinEvent;
         _enumProc = (hwnd, _) => { _enumBuffer.Add(hwnd); return true; };
+        _shellViewProc = IsShellViewChild;
         _thread = new Thread(ThreadMain) { IsBackground = true, Name = "WindowTracker" };
     }
 
@@ -71,6 +75,9 @@ public sealed class WindowTracker : IDisposable
 
     /// <summary>対象PID集合が変わったとき（起動・終了・再起動の検知）</summary>
     public event Action<IReadOnlyCollection<int>>? TargetProcessesChanged;
+
+    /// <summary>追跡中に例外が起きたとき（トラッカーは止まらずに続行する）</summary>
+    public event Action<Exception>? Error;
 
     public void Start()
     {
@@ -124,8 +131,16 @@ public sealed class WindowTracker : IDisposable
         while (!_stopping)
         {
             long now = Stopwatch.GetTimestamp();
-            if (now >= _nextProcessRescan) RefreshTargetProcesses(now);
-            if (_dirty || now >= _nextRescan) Rescan(now);
+            try
+            {
+                if (now >= _nextProcessRescan) RefreshTargetProcesses(now);
+                if (_dirty || now >= _nextRescan) Rescan(now);
+            }
+            catch (Exception ex)
+            {
+                // 1 回の失敗で追跡を止めない。次の定期再列挙でやり直す
+                ReportError(ex);
+            }
 
             long waitTicks = Math.Max(0, Math.Min(_nextRescan, _nextProcessRescan) - Stopwatch.GetTimestamp());
             uint waitMs = (uint)Math.Min(waitTicks * 1000 / Stopwatch.Frequency + 1, 1000);
@@ -142,6 +157,20 @@ public sealed class WindowTracker : IDisposable
     }
 
     private void OnWinEvent(nint hook, uint eventType, nint hwnd, int idObject, int idChild, uint eventThread, uint eventTime)
+    {
+        // ネイティブからのコールバックなので、例外を外に出すとプロセスごと落ちる
+        try
+        {
+            HandleWinEvent(eventType, hwnd, idObject, idChild);
+        }
+        catch (Exception ex)
+        {
+            _dirty = true;
+            ReportError(ex);
+        }
+    }
+
+    private void HandleWinEvent(uint eventType, nint hwnd, int idObject, int idChild)
     {
         // トップレベル判定はスナップショット側で行う。ここではウィンドウ自身のイベントだけを見る
         if (hwnd == 0 || idObject != User32.OBJID_WINDOW || idChild != User32.CHILDID_SELF)
@@ -211,13 +240,31 @@ public sealed class WindowTracker : IDisposable
             if (w is not null) list.Add(w);
         }
 
+        // 消えたダイアログの判定結果を捨てる
+        if (_dialogs.Count > 0)
+        {
+            var alive = _enumBuffer.ToHashSet();
+            foreach (var h in _dialogs.Keys.Where(h => !alive.Contains(h)).ToList()) _dialogs.Remove(h);
+        }
+
         var snapshot = new WindowSnapshot(list, Stopwatch.GetTimestamp(), _targetPids ?? []);
         var previous = Current;
         if (previous.ContentEquals(snapshot)) return;
 
         Current = snapshot;
+        var previousHandles = _trackedHandles;
         _trackedHandles = list.Select(w => w.Handle).ToHashSet();
-        SnapshotChanged?.Invoke(snapshot, previous, trigger);
+        try
+        {
+            SnapshotChanged?.Invoke(snapshot, previous, trigger);
+        }
+        catch
+        {
+            // 受け手（キャプチャの同期など）が失敗したら、次の再列挙で同じ変化をもう一度通知する
+            Current = previous;
+            _trackedHandles = previousHandles;
+            throw;
+        }
     }
 
     private TrackedWindow? Inspect(nint hwnd, int zIndex)
@@ -238,6 +285,7 @@ public sealed class WindowTracker : IDisposable
         string? ProcName() => GetProcessName(pid);
 
         if (_options.Exclude.Any(r => r.Matches(className, title, ProcName))) return null;
+        if (_options.HideFileDialogs && (className == "#32770" ? IsFileDialogOrPending(hwnd) : IsOwnedByFileDialog(hwnd))) return null;
 
         MatchReason reason;
         if (isTarget) reason = MatchReason.TargetProcess;
@@ -259,6 +307,65 @@ public sealed class WindowTracker : IDisposable
             Dpi: User32.GetDpiForWindow(hwnd),
             Monitor: User32.MonitorFromWindow(hwnd, User32.MONITOR_DEFAULTTONEAREST),
             Reason: reason);
+    }
+
+    /// <summary>
+    /// 標準ダイアログがファイルダイアログか（まだ判定できない間も true = 映さない）。
+    /// ファイルダイアログは、エクスプローラーと同じファイル一覧（シェルビュー）を子に持つ
+    /// </summary>
+    private bool IsFileDialogOrPending(nint hwnd)
+    {
+        long now = Stopwatch.GetTimestamp();
+        if (!_dialogs.TryGetValue(hwnd, out var state))
+        {
+            state = new DialogState { FirstSeen = now };
+            _dialogs[hwnd] = state;
+        }
+        if (state.IsFileDialog) return true;
+
+        _shellViewFound = false;
+        User32.EnumChildWindows(hwnd, _shellViewProc, 0);
+        if (_shellViewFound)
+        {
+            state.IsFileDialog = true;
+            return true;
+        }
+
+        long graceEnd = state.FirstSeen + (long)(_options.DialogGrace.TotalSeconds * Stopwatch.Frequency);
+        if (now >= graceEnd) return false;
+        _nextRescan = Math.Min(_nextRescan, graceEnd); // 猶予が切れたらすぐ判定し直す
+        return true;
+    }
+
+    /// <summary>ファイルダイアログ（または判定中の標準ダイアログ）が所有する窓か（パスを表示するツールチップなど）</summary>
+    private bool IsOwnedByFileDialog(nint hwnd)
+    {
+        var owner = User32.GetWindow(hwnd, User32.GW_OWNER);
+        for (int depth = 0; owner != 0 && depth < 8; depth++)
+        {
+            // Z 順では所有される窓のほうが手前なので、ダイアログ本体より先にここへ来ることがある
+            if (GetText(owner, isClass: true) == "#32770" && IsFileDialogOrPending(owner)) return true;
+            owner = User32.GetWindow(owner, User32.GW_OWNER);
+        }
+        return false;
+    }
+
+    private bool IsShellViewChild(nint hwnd, nint _)
+    {
+        string cls = GetText(hwnd, isClass: true);
+        _shellViewFound = cls is "SHELLDLL_DefView" or "DUIViewWndClassName" or "SHBrowseForFolder ShellNameSpace Control";
+        return !_shellViewFound;
+    }
+
+    private sealed class DialogState
+    {
+        public long FirstSeen;
+        public bool IsFileDialog;
+    }
+
+    private void ReportError(Exception ex)
+    {
+        try { Error?.Invoke(ex); } catch { /* 通知先の例外でトラッカーを止めない */ }
     }
 
     private string GetText(nint hwnd, bool isClass)

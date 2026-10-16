@@ -53,6 +53,15 @@ public sealed class TrackerOptions
     /// <summary>対象プロセスでも映さないウィンドウ（Include より優先）</summary>
     public IReadOnlyList<WindowRule> Exclude { get; init; } = [];
 
+    /// <summary>
+    /// 「ファイルを開く／保存」などのファイルダイアログを映さない（フォルダー名やユーザー名が映るのを防ぐ）。
+    /// 標準ダイアログ（#32770）は、ファイルダイアログかどうか判定できるまで <see cref="DialogGrace"/> の間は映さない
+    /// </summary>
+    public bool HideFileDialogs { get; init; } = true;
+
+    /// <summary>標準ダイアログを、ファイルダイアログでないと判断して映し始めるまでの猶予</summary>
+    public TimeSpan DialogGrace { get; init; } = TimeSpan.FromMilliseconds(300);
+
     /// <summary>イベント取りこぼし対策の定期再列挙間隔</summary>
     public TimeSpan RescanInterval { get; init; } = TimeSpan.FromMilliseconds(500);
 

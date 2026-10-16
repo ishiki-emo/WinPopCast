@@ -17,6 +17,7 @@ int fps = 60;
 bool verbose = false;
 string? measurePath = null; // M4: ウィンドウごとの開始遅延を TSV に書く
 var canvasSpec = CanvasSpec.Default;
+bool showFileDialogs = false;
 string? dumpPath = null; // デバッグ: 起動 3 秒後の合成結果を PNG に保存
 
 for (int i = 0; i < args.Length; i++)
@@ -31,6 +32,7 @@ for (int i = 0; i < args.Length; i++)
         case "--dump": dumpPath = Next(); break;
         case "--measure": measurePath = Next(); break;
         case "--canvas": canvasSpec = CanvasSpec.Parse(Next()); break;
+        case "--show-file-dialogs": showFileDialogs = true; break;
         case "--monitors": PrintMonitors(); return 0;
         default: Console.Error.WriteLine($"不明な引数: {args[i]}"); return 1;
     }
@@ -44,6 +46,7 @@ if (processName is null)
           --canvas <指定>    auto（メインウィンドウのモニター、既定） / virtual（全モニター） / window（メインウィンドウの矩形）
                              / primary / モニター番号（1〜） / デバイス名（\\.\DISPLAY2 など）
           --monitors         モニターの一覧を表示
+          --show-file-dialogs 「ファイルを開く／保存」ダイアログも映す（既定では映さない）
           -v, --verbose      ウィンドウごとのキャプチャ開始などを表示
         """);
     return 1;
@@ -63,7 +66,7 @@ Log($"Spout sender '{senderName}' @ {fps}fps");
 
 using var engine = new CaptureEngine(d3d, new EngineOptions
 {
-    Tracker = new TrackerOptions { ProcessNames = [processName] },
+    Tracker = new TrackerOptions { ProcessNames = [processName], HideFileDialogs = !showFileDialogs },
     Fps = fps,
     Canvas = canvasSpec,
 }, sender);
@@ -136,7 +139,10 @@ engine.StatusUpdated += s =>
         if (monitorMissing) Log($"モニター '{canvasSpec.Monitor}' が見つからないため、メインウィンドウのモニターを使います");
     }
 };
+int exitCode = 0;
+var exit = new ManualResetEventSlim();
 engine.Error += ex => Log($"error: {ex}");
+engine.DeviceLost += reason => { Log($"GPU のデバイスが失われました（{reason}）。終了します"); exitCode = 2; exit.Set(); };
 
 if (dumpPath is not null)
 {
@@ -153,7 +159,7 @@ if (dumpPath is not null)
     engine.PreviewEnabled = true;
 }
 
-var exit = new ManualResetEventSlim();
+
 Console.CancelKeyPress += (_, e) => { e.Cancel = true; exit.Set(); };
 engine.Start();
 
@@ -164,7 +170,7 @@ while (!exit.Wait(5000))
         Log($"send {s.SendFps:F1}fps, render {s.RenderMs:F2}ms, windows {s.WindowCount}, captures {s.CaptureCount}, " +
             $"mem {Environment.WorkingSet / 1024 / 1024}MB");
 }
-return 0;
+return exitCode;
 
 static void PrintMonitors()
 {

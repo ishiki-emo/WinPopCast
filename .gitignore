@@ -6,3 +6,5 @@ obj/
 native/*/build/
 logs/
 artifacts/
+Videos/
+docs/demo-video.md

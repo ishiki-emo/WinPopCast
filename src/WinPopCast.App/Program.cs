@@ -18,14 +18,16 @@ internal static class Program
 
         string settingsPath = AppSettings.DefaultPath;
         bool showSettings = false;
+        int testDeviceLost = 0;
         for (int i = 0; i < args.Length; i++)
         {
             if (args[i] == "--settings" && i + 1 < args.Length) settingsPath = args[++i];
             else if (args[i] == "--show") showSettings = true;
+            else if (args[i] == "--test-device-lost" && i + 1 < args.Length) testDeviceLost = int.Parse(args[++i]); // 復帰処理の確認用（非公開）
         }
 
         if (settingsPath == AppSettings.DefaultPath) AppSettings.MigrateLegacy();
-        Application.Run(new TrayApp(settingsPath, showSettings));
+        Application.Run(new TrayApp(settingsPath, showSettings, testDeviceLost));
         return 0;
     }
 }

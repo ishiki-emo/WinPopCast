@@ -20,6 +20,9 @@ public sealed class AppSettings
 
     public List<WindowRule> Exclude { get; set; } = [];
 
+    /// <summary>「ファイルを開く／保存」ダイアログを映さない（フォルダー名などの映り込み防止）</summary>
+    public bool HideFileDialogs { get; set; } = true;
+
     /// <summary>送信するか（トレイのメニューで切り替える）</summary>
     public bool Enabled { get; set; } = true;
 

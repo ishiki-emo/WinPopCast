@@ -61,6 +61,8 @@ public sealed class CaptureEngine : IDisposable
             BeforeSync?.Invoke(now, prev, trigger);
             Captures.Sync(now);
         };
+        Tracker.Error += RaiseError;
+        Captures.Error += (_, ex) => RaiseError(ex);
         _thread = new Thread(RenderLoop) { IsBackground = true, Name = "CaptureEngine", Priority = ThreadPriority.AboveNormal };
     }
 
@@ -94,8 +96,45 @@ public sealed class CaptureEngine : IDisposable
     /// <summary>状態が更新された（エンジンのスレッド）</summary>
     public event Action<EngineStatus>? StatusUpdated;
 
-    /// <summary>合成ループで例外が出たとき（エンジンのスレッド）。ループは続行する</summary>
+    /// <summary>
+    /// 追跡・キャプチャ・合成で例外が出たとき（各スレッドで発火）。エンジンは続行する
+    /// </summary>
     public event Action<Exception>? Error;
+
+    /// <summary>
+    /// GPU のデバイスが失われた（ドライバーの更新・リセットなど）。合成ループは止まるので、
+    /// 受け手は D3DContext ごとエンジンを作り直すこと（エンジンのスレッドで 1 回だけ発火）
+    /// </summary>
+    public event Action<string>? DeviceLost;
+
+    /// <summary>デバイスが失われて止まっているか</summary>
+    public bool IsDeviceLost { get; private set; }
+
+    private void RaiseError(Exception ex)
+    {
+        try { Error?.Invoke(ex); } catch { }
+    }
+
+    private volatile bool _simulateDeviceLost;
+
+    /// <summary>復帰処理の確認用：次の確認時にデバイスが失われたものとして扱う</summary>
+    public void SimulateDeviceLost() => _simulateDeviceLost = true;
+
+    /// <summary>デバイスが失われていれば、理由を返す</summary>
+    private string? CheckDeviceRemoved()
+    {
+        if (_simulateDeviceLost) return "simulated";
+        var reason = _d3d.Device.DeviceRemovedReason;
+        return reason.Failure ? $"0x{reason.Code:X8} {reason.Description}" : null;
+    }
+
+    private void HandleDeviceLost(string reason)
+    {
+        if (IsDeviceLost) return;
+        IsDeviceLost = true;
+        _stopping = true;
+        try { DeviceLost?.Invoke(reason); } catch { }
+    }
 
     public void Start()
     {
@@ -159,6 +198,11 @@ public sealed class CaptureEngine : IDisposable
                 long now = Stopwatch.GetTimestamp();
                 if (now - lastStats >= Stopwatch.Frequency)
                 {
+                    if (CheckDeviceRemoved() is { } removed)
+                    {
+                        HandleDeviceLost(removed);
+                        break;
+                    }
                     double sec = (now - lastStats) / (double)Stopwatch.Frequency;
                     long n = sent - lastSent;
                     Status = new EngineStatus(snapshot.TargetProcessIds, snapshot.Windows.Count, Captures.Count, canvas,
@@ -169,7 +213,12 @@ public sealed class CaptureEngine : IDisposable
             }
             catch (Exception ex)
             {
-                Error?.Invoke(ex);
+                if (CheckDeviceRemoved() is { } removed)
+                {
+                    HandleDeviceLost(removed);
+                    break;
+                }
+                RaiseError(ex);
             }
         }
     }

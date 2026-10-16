@@ -34,7 +34,11 @@ public sealed class WindowCapture : IDisposable
         _pool = Direct3D11CaptureFramePool.CreateFreeThreaded(
             d3d.WinRTDevice, DirectXPixelFormat.B8G8R8A8UIntNormalized, 2, _poolSize);
         _pool.FrameArrived += OnFrameArrived;
-        _item.Closed += (_, _) => Closed?.Invoke(this);
+        _item.Closed += (_, _) =>
+        {
+            try { Closed?.Invoke(this); }
+            catch (Exception ex) { try { Error?.Invoke(this, ex); } catch { } }
+        };
 
         _session = _pool.CreateCaptureSession(_item);
         _session.IsCursorCaptureEnabled = false;
@@ -86,7 +90,23 @@ public sealed class WindowCapture : IDisposable
     /// <summary>最初のフレームが届いた（フレームプールのスレッドで発火。開始遅延の計測用）</summary>
     public event Action<WindowCapture>? FirstFrameArrived;
 
+    /// <summary>フレームの処理中に例外が起きた（フレームプールのスレッドで発火）。キャプチャは続行する</summary>
+    public event Action<WindowCapture, Exception>? Error;
+
     private void OnFrameArrived(Direct3D11CaptureFramePool sender, object args)
+    {
+        // WinRT のコールバックなので、例外を外に出さない
+        try
+        {
+            ProcessFrame(sender);
+        }
+        catch (Exception ex)
+        {
+            try { Error?.Invoke(this, ex); } catch { }
+        }
+    }
+
+    private void ProcessFrame(Direct3D11CaptureFramePool sender)
     {
         using var frame = sender.TryGetNextFrame();
         if (frame is null) return;

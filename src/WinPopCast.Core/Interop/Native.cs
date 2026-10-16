@@ -61,6 +61,10 @@ internal static partial class User32
     public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, nint lParam);
 
     [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool EnumChildWindows(nint hWndParent, EnumWindowsProc lpEnumFunc, nint lParam);
+
+    [DllImport("user32.dll")]
     public static extern uint GetWindowThreadProcessId(nint hWnd, out int lpdwProcessId);
 
     [DllImport("user32.dll")]

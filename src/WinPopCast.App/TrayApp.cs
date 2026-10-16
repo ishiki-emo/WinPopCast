@@ -37,15 +37,16 @@ internal static class TrayIcons
 internal sealed class TrayApp : ApplicationContext
 {
     private readonly string _settingsPath;
-    private readonly AppController _controller = new();
+    private readonly AppController _controller;
     private readonly NotifyIcon _tray;
     private readonly ToolStripMenuItem _toggle;
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = 1000 };
     private AppSettings _settings;
     private SettingsForm? _form;
 
-    public TrayApp(string settingsPath, bool showSettings)
+    public TrayApp(string settingsPath, bool showSettings, int testDeviceLostSeconds = 0)
     {
+        _controller = new AppController();
         _settingsPath = settingsPath;
         _settings = AppSettings.Load(settingsPath);
 
@@ -69,6 +70,13 @@ internal sealed class TrayApp : ApplicationContext
         _timer.Tick += (_, _) => UpdateTray();
         _timer.Start();
         UpdateTray();
+
+        if (testDeviceLostSeconds > 0)
+        {
+            var t = new System.Windows.Forms.Timer { Interval = testDeviceLostSeconds * 1000 };
+            t.Tick += (_, _) => { t.Dispose(); _controller.SimulateDeviceLost(); };
+            t.Start();
+        }
 
         // 対象が未設定なら最初に設定画面を出す
         if (showSettings || string.IsNullOrWhiteSpace(_settings.ProcessName)) ShowSettings();

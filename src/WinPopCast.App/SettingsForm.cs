@@ -19,6 +19,7 @@ public sealed class SettingsForm : Form
     private readonly DataGridView _include = CreateRuleGrid("プロセス名（必須）");
     private readonly DataGridView _exclude = CreateRuleGrid("プロセス名");
     private readonly CheckBox _preview = new() { Text = "プレビューを表示", AutoSize = true };
+    private readonly CheckBox _hideFileDialogs = new() { Text = "「ファイルを開く／保存」ダイアログを映さない（推奨）", AutoSize = true };
     private readonly PictureBox _previewBox = new()
     {
         Dock = DockStyle.Fill,
@@ -79,6 +80,7 @@ public sealed class SettingsForm : Form
         AddRow(root, "キャンバス", _canvas);
         AddRow(root, "FPS", _fps);
         AddRow(root, "Spout 送信者名", _sender);
+        AddRow(root, "映り込み防止", _hideFileDialogs);
 
         var rules = new TabControl { Dock = DockStyle.Fill, Height = 150 };
         rules.TabPages.Add(new TabPage("許可リスト（他プロセスでも映す）") { Controls = { _include } });
@@ -148,6 +150,7 @@ public sealed class SettingsForm : Form
         FillRules(_include, s.Include);
         FillRules(_exclude, s.Exclude);
         _preview.Checked = s.Preview;
+        _hideFileDialogs.Checked = s.HideFileDialogs;
     }
 
     private AppSettings ReadSettings()
@@ -161,6 +164,7 @@ public sealed class SettingsForm : Form
         s.Include = ReadRules(_include);
         s.Exclude = ReadRules(_exclude);
         s.Preview = _preview.Checked;
+        s.HideFileDialogs = _hideFileDialogs.Checked;
         return s;
     }
 
@@ -270,6 +274,8 @@ public sealed class SettingsForm : Form
             text = $"送信中 '{settings.SenderName}'  {s.SendFps:F0}fps  ウィンドウ {s.WindowCount}  キャンバス {s.Canvas.Width}x{s.Canvas.Height}" +
                 (s.CanvasMonitorMissing ? "（指定モニターが見つからないため自動）" : "");
         if (settings?.Include.Any(r => !r.IsValidInclude) == true) text += "\n※ 許可リストのうち、プロセス名がない行は無視しています";
+        if (_controller.LastRecovery is { } rec) text += $"\nGPU のエラーから復帰しました（{rec:HH:mm:ss}、計 {_controller.RecoveryCount} 回）";
+        if (_controller.LastWarning is { } warn) text += $"\n直近のエラー: {warn}";
         _status.Text = text;
     }
 

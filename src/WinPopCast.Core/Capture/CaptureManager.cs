@@ -20,6 +20,9 @@ public sealed class CaptureManager : IDisposable
     public event Action<TrackedWindow, Exception>? CaptureFailed;
     public event Action<WindowCapture>? FirstFrameArrived;
 
+    /// <summary>キャプチャ中の例外（フレームプールのスレッドで発火）</summary>
+    public event Action<WindowCapture, Exception>? Error;
+
     /// <summary>トラッカーのスナップショットに同期させる（どのスレッドから呼んでもよい）</summary>
     public void Sync(WindowSnapshot snapshot)
     {
@@ -42,6 +45,7 @@ public sealed class CaptureManager : IDisposable
                 {
                     var cap = WindowCapture.Start(_d3d, w.Handle);
                     cap.FirstFrameArrived += c => FirstFrameArrived?.Invoke(c);
+                    cap.Error += (c, ex) => Error?.Invoke(c, ex);
                     cap.Closed += OnClosed;
                     _captures[w.Handle] = cap;
                     CaptureStarted?.Invoke(cap, w);
