@@ -21,8 +21,11 @@ for (int i = 0; i < args.Length; i++)
     {
         case "--process" or "-p": processNames.Add(Path.GetFileNameWithoutExtension(Next())); break;
         case "--pid": pids.Add(int.Parse(Next())); break;
-        case "--include-class": include.Add(new WindowRule { ClassName = Next() }); break;
-        case "--include-process": include.Add(new WindowRule { ProcessName = Next() }); break;
+        case "--include":
+            // <プロセス名>[:<クラス名>]。プロセス名のない許可ルールは受け付けない（無関係なアプリまで拾うため）
+            var parts = Next().Split(':', 2);
+            include.Add(new WindowRule { ProcessName = parts[0], ClassName = parts.Length > 1 ? parts[1] : null });
+            break;
         case "--exclude-class": exclude.Add(new WindowRule { ClassName = Next() }); break;
         case "--exclude-title": exclude.Add(new WindowRule { TitleContains = Next() }); break;
         case "--raw": raw = true; break;
@@ -171,8 +174,7 @@ static void PrintUsage()
         使い方: WinPopCast.Probe --process <名前> [オプション]
           -p, --process <名前>       対象プロセス名（例: Unity）。複数指定可
           --pid <PID>                PIDで指定
-          --include-class <クラス名>  他プロセスでも対象にするクラス名（IME候補窓など）
-          --include-process <名前>    他プロセスでも対象にするプロセス名
+          --include <名前>[:<クラス>] 他プロセスでも対象にするプロセス名（と、絞り込むクラス名）。IME候補窓など
           --exclude-class <クラス名>  除外するクラス名
           --exclude-title <文字列>    タイトルに含む場合は除外
           --raw                       生の WinEvent も出力（LOCATIONCHANGE を除く）

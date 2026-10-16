@@ -16,8 +16,8 @@ public sealed class SettingsForm : Form
     private readonly ComboBox _canvas = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
     private readonly ComboBox _fps = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 80 };
     private readonly TextBox _sender = new() { Dock = DockStyle.Fill };
-    private readonly DataGridView _include = CreateRuleGrid();
-    private readonly DataGridView _exclude = CreateRuleGrid();
+    private readonly DataGridView _include = CreateRuleGrid("プロセス名（必須）");
+    private readonly DataGridView _exclude = CreateRuleGrid("プロセス名");
     private readonly CheckBox _preview = new() { Text = "プレビューを表示", AutoSize = true };
     private readonly PictureBox _previewBox = new()
     {
@@ -47,7 +47,11 @@ public sealed class SettingsForm : Form
         LoadSettings(settings);
 
         _refresh.Click += (_, _) => RefreshProcesses();
-        _apply.Click += (_, _) => _onApply(ReadSettings());
+        _apply.Click += (_, _) =>
+        {
+            if (!ValidateInclude()) return;
+            _onApply(ReadSettings());
+        };
         _preview.CheckedChanged += (_, _) =>
         {
             if (!_preview.Checked) _previewBox.Image = null;
@@ -113,7 +117,7 @@ public sealed class SettingsForm : Form
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
     }
 
-    private static DataGridView CreateRuleGrid()
+    private static DataGridView CreateRuleGrid(string processHeader)
     {
         var grid = new DataGridView
         {
@@ -127,7 +131,7 @@ public sealed class SettingsForm : Form
         };
         grid.Columns.Add("ClassName", "クラス名（完全一致）");
         grid.Columns.Add("TitleContains", "タイトル（部分一致）");
-        grid.Columns.Add("ProcessName", "プロセス名");
+        grid.Columns.Add("ProcessName", processHeader);
         return grid;
     }
 
@@ -158,6 +162,28 @@ public sealed class SettingsForm : Form
         s.Exclude = ReadRules(_exclude);
         s.Preview = _preview.Checked;
         return s;
+    }
+
+    /// <summary>
+    /// 許可リストの各行にプロセス名があるか。ないと、タイトルやクラス名が一致した無関係なアプリ
+    /// （ブラウザのタブなど）まで映ってしまうので、適用させない。
+    /// </summary>
+    private bool ValidateInclude()
+    {
+        foreach (DataGridViewRow row in _include.Rows)
+        {
+            if (row.IsNewRow) continue;
+            bool any = row.Cells.Cast<DataGridViewCell>().Any(c => !string.IsNullOrWhiteSpace(c.Value?.ToString()));
+            if (!any || !string.IsNullOrWhiteSpace(row.Cells[2].Value?.ToString())) continue;
+
+            MessageBox.Show(this,
+                "許可リストには、プロセス名を必ず入力してください。\n\nプロセス名がないと、タイトルやクラス名が一致した別のアプリ（ブラウザのタブなど）まで配信に映ってしまいます。",
+                "WinPopCast", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            _include.CurrentCell = row.Cells[2];
+            _include.Focus();
+            return false;
+        }
+        return true;
     }
 
     private static void FillRules(DataGridView grid, List<WindowRule> rules)
@@ -243,6 +269,7 @@ public sealed class SettingsForm : Form
         else
             text = $"送信中 '{settings.SenderName}'  {s.SendFps:F0}fps  ウィンドウ {s.WindowCount}  キャンバス {s.Canvas.Width}x{s.Canvas.Height}" +
                 (s.CanvasMonitorMissing ? "（指定モニターが見つからないため自動）" : "");
+        if (settings?.Include.Any(r => !r.IsValidInclude) == true) text += "\n※ 許可リストのうち、プロセス名がない行は無視しています";
         _status.Text = text;
     }
 

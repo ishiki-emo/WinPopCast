@@ -15,6 +15,12 @@ public sealed class WindowRule
     /// <summary>プロセス名（拡張子なし）の完全一致</summary>
     public string? ProcessName { get; init; }
 
+    /// <summary>
+    /// 許可リストとして有効か。プロセス名のない許可ルールは、タイトルやクラス名が一致した
+    /// 無関係なアプリ（ブラウザのタブなど）まで映してしまうので受け付けない。
+    /// </summary>
+    public bool IsValidInclude => !string.IsNullOrWhiteSpace(ProcessName);
+
     internal bool Matches(string className, string title, Func<string?> processName)
     {
         if (ClassName is null && TitleContains is null && ProcessName is null) return false;
@@ -41,7 +47,7 @@ public sealed class TrackerOptions
     /// <summary>PIDで直接指定する場合</summary>
     public IReadOnlyList<int> ProcessIds { get; init; } = [];
 
-    /// <summary>対象プロセス以外でも映すウィンドウ</summary>
+    /// <summary>対象プロセス以外でも映すウィンドウ。プロセス名のないルールは無視する（<see cref="WindowRule.IsValidInclude"/>）</summary>
     public IReadOnlyList<WindowRule> Include { get; init; } = [];
 
     /// <summary>対象プロセスでも映さないウィンドウ（Include より優先）</summary>

@@ -30,6 +30,7 @@ public sealed class WindowTracker : IDisposable
     ];
 
     private readonly TrackerOptions _options;
+    private readonly List<WindowRule> _include; // 有効な許可ルールだけ（プロセス名のないものは除く）
     private readonly Thread _thread;
     private readonly ManualResetEventSlim _started = new();
     private readonly WinEventProc _winEventProc; // GC されないよう保持
@@ -51,6 +52,7 @@ public sealed class WindowTracker : IDisposable
     public WindowTracker(TrackerOptions options)
     {
         _options = options;
+        _include = options.Include.Where(r => r.IsValidInclude).ToList();
         _winEventProc = OnWinEvent;
         _enumProc = (hwnd, _) => { _enumBuffer.Add(hwnd); return true; };
         _thread = new Thread(ThreadMain) { IsBackground = true, Name = "WindowTracker" };
@@ -157,7 +159,7 @@ public sealed class WindowTracker : IDisposable
             // Z順・表示状態の変化は他プロセス起因でも相対順に影響しうるし、許可リスト窓の出現もある
             WinEvents.EVENT_SYSTEM_FOREGROUND or WinEvents.EVENT_OBJECT_REORDER => true,
             WinEvents.EVENT_OBJECT_SHOW or WinEvents.EVENT_OBJECT_UNCLOAKED or WinEvents.EVENT_SYSTEM_MENUPOPUPSTART
-                => isTargetPid || isTracked || _options.Include.Count > 0,
+                => isTargetPid || isTracked || _include.Count > 0,
             _ => isTargetPid || isTracked,
         };
         if (!relevant) return;
@@ -222,7 +224,7 @@ public sealed class WindowTracker : IDisposable
     {
         User32.GetWindowThreadProcessId(hwnd, out int pid);
         bool isTarget = _targetPids is not null && _targetPids.Contains(pid);
-        if (!isTarget && _options.Include.Count == 0) return null;
+        if (!isTarget && _include.Count == 0) return null;
 
         if (!User32.IsWindowVisible(hwnd) || User32.IsIconic(hwnd)) return null;
         if (Dwmapi.DwmGetWindowAttribute(hwnd, Dwmapi.DWMWA_CLOAKED, out int cloaked, sizeof(int)) == 0 && cloaked != 0)
@@ -239,7 +241,7 @@ public sealed class WindowTracker : IDisposable
 
         MatchReason reason;
         if (isTarget) reason = MatchReason.TargetProcess;
-        else if (_options.Include.Any(r => r.Matches(className, title, ProcName))) reason = MatchReason.IncludeRule;
+        else if (_include.Any(r => r.Matches(className, title, ProcName))) reason = MatchReason.IncludeRule;
         else return null;
 
         User32.GetWindowRect(hwnd, out var wr);
