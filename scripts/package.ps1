@@ -42,10 +42,10 @@ dotnet publish src/AppCapture.App/AppCapture.App.csproj -c Release -o $publishDi
     -p:DebugType=none
 if ($LASTEXITCODE) { throw "dotnet publish failed" }
 
-Copy-Item README.md, THIRD-PARTY-NOTICES.md $publishDir
+Copy-Item README.md, LICENSE, THIRD-PARTY-NOTICES.md $publishDir
 
 # 単一 exe にまとめきれなかったファイルが出ていないか確認する
-$extra = Get-ChildItem $publishDir -File | Where-Object { $_.Name -notin @("AppCapture.exe", "README.md", "THIRD-PARTY-NOTICES.md") }
+$extra = Get-ChildItem $publishDir -File | Where-Object { $_.Name -notin @("AppCapture.exe", "README.md", "LICENSE", "THIRD-PARTY-NOTICES.md") }
 if ($extra) { Write-Warning "単一 exe 以外のファイルがあります: $($extra.Name -join ', ')" }
 
 if (Test-Path $zipPath) { Remove-Item $zipPath }

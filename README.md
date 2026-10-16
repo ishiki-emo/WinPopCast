@@ -91,4 +91,4 @@ pwsh scripts/package.ps1
 
 ## ライセンス
 
-未定です（公開時に決めます）。同梱しているサードパーティーのソフトウェアについては [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) を参照してください。
+[MIT License](LICENSE) です。同梱しているサードパーティーのソフトウェアについては [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) を参照してください。
