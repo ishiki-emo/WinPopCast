@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Text;
+using AppCapture.Core.Engine;
 using AppCapture.Core.Graphics;
 using Vortice.Direct3D11;
 
@@ -9,7 +10,7 @@ namespace AppCapture.Spout;
 /// Spout2 送信者（native/SpoutBridge 経由で SpoutDX を使う）。
 /// テクスチャのサイズが変わると Spout 側で共有テクスチャが作り直される。
 /// </summary>
-public sealed class SpoutSender : IDisposable
+public sealed class SpoutSender : IFrameSink, IDisposable
 {
     private readonly D3DContext _d3d;
     private nint _handle;
@@ -31,6 +32,8 @@ public sealed class SpoutSender : IDisposable
         lock (_d3d.Lock)
             return _handle != 0 && Native.SpoutBridge_SendTexture(_handle, texture.NativePointer);
     }
+
+    void IFrameSink.Send(ID3D11Texture2D texture) => Send(texture);
 
     public void Dispose()
     {

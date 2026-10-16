@@ -40,10 +40,15 @@ public sealed class Compositor : IDisposable
     private readonly ID3D11PixelShader _ps;
     private readonly ID3D11Buffer _params;
     private readonly ID3D11SamplerState _sampler;
+    private readonly ID3D11SamplerState _linearSampler;
     private readonly ID3D11BlendState _blend;
     private readonly ID3D11RasterizerState _rasterizer;
     private readonly Dictionary<nint, ID3D11ShaderResourceView> _srvCache = [];
     private ID3D11RenderTargetView? _rtv;
+    private ID3D11Texture2D? _scaled;
+    private ID3D11RenderTargetView? _scaledRtv;
+    private ID3D11ShaderResourceView? _scaledSrcSrv;
+    private ID3D11Texture2D? _scaledSrc;
 
     public Compositor(D3DContext d3d)
     {
@@ -58,6 +63,7 @@ public sealed class Compositor : IDisposable
         _params = device.CreateBuffer(new BufferDescription(16, BindFlags.ConstantBuffer, ResourceUsage.Dynamic, CpuAccessFlags.Write));
         // 1:1 で描くので point サンプリング（サイズ変更の過渡期に伸びてもにじませない）
         _sampler = device.CreateSamplerState(new SamplerDescription(Filter.MinMagMipPoint, TextureAddressMode.Clamp));
+        _linearSampler = device.CreateSamplerState(new SamplerDescription(Filter.MinMagMipLinear, TextureAddressMode.Clamp));
 
         var blend = new BlendDescription();
         blend.RenderTarget[0] = new RenderTargetBlendDescription
@@ -130,6 +136,62 @@ public sealed class Compositor : IDisposable
         return Output!;
     }
 
+    /// <summary>
+    /// source（Render の出力）を width x height に縮小して描く（プレビュー用）。呼び出し側で D3DContext.Lock を取ること。
+    /// </summary>
+    public ID3D11Texture2D RenderScaled(ID3D11Texture2D source, int width, int height)
+    {
+        if (_scaled is not { } t || t.Description.Width != width || t.Description.Height != height)
+        {
+            _scaledRtv?.Dispose();
+            _scaled?.Dispose();
+            _scaled = CreateTarget(width, height);
+            _scaledRtv = _d3d.Device.CreateRenderTargetView(_scaled);
+        }
+        if (!ReferenceEquals(_scaledSrc, source))
+        {
+            _scaledSrcSrv?.Dispose();
+            _scaledSrcSrv = _d3d.Device.CreateShaderResourceView(source);
+            _scaledSrc = source;
+        }
+
+        var ctx = _d3d.Context;
+        ctx.ClearRenderTargetView(_scaledRtv!, new Color4(0, 0, 0, 0));
+        ctx.OMSetRenderTargets(_scaledRtv!);
+        ctx.OMSetBlendState(null);
+        ctx.RSSetViewport(0, 0, width, height);
+        ctx.RSSetState(_rasterizer);
+        ctx.IASetInputLayout(null);
+        ctx.IASetPrimitiveTopology(PrimitiveTopology.TriangleStrip);
+        ctx.VSSetShader(_vs);
+        ctx.VSSetConstantBuffer(0, _params);
+        ctx.PSSetShader(_ps);
+        ctx.PSSetSampler(0, _linearSampler);
+
+        var mapped = ctx.Map(_params, MapMode.WriteDiscard);
+        Marshal.StructureToPtr(new Params(-1f, 1f, 1f, -1f), mapped.DataPointer, false);
+        ctx.Unmap(_params);
+        ctx.PSSetShaderResource(0, _scaledSrcSrv!);
+        ctx.Draw(4, 0);
+
+        ctx.PSSetShaderResource(0, null!);
+        ctx.OMSetRenderTargets((ID3D11RenderTargetView)null!);
+        return _scaled!;
+    }
+
+    private ID3D11Texture2D CreateTarget(int width, int height) =>
+        _d3d.Device.CreateTexture2D(new Texture2DDescription
+        {
+            Width = (uint)width,
+            Height = (uint)height,
+            MipLevels = 1,
+            ArraySize = 1,
+            Format = Format.B8G8R8A8_UNorm,
+            SampleDescription = new SampleDescription(1, 0),
+            Usage = ResourceUsage.Default,
+            BindFlags = BindFlags.RenderTarget | BindFlags.ShaderResource,
+        });
+
     private ID3D11ShaderResourceView GetSrv(ID3D11Texture2D texture)
     {
         if (!_srvCache.TryGetValue(texture.NativePointer, out var srv))
@@ -145,17 +207,7 @@ public sealed class Compositor : IDisposable
         if (Output is { } o && o.Description.Width == width && o.Description.Height == height) return;
         _rtv?.Dispose();
         Output?.Dispose();
-        Output = _d3d.Device.CreateTexture2D(new Texture2DDescription
-        {
-            Width = (uint)width,
-            Height = (uint)height,
-            MipLevels = 1,
-            ArraySize = 1,
-            Format = Format.B8G8R8A8_UNorm,
-            SampleDescription = new SampleDescription(1, 0),
-            Usage = ResourceUsage.Default,
-            BindFlags = BindFlags.RenderTarget | BindFlags.ShaderResource,
-        });
+        Output = CreateTarget(width, height);
         _rtv = _d3d.Device.CreateRenderTargetView(Output);
     }
 
@@ -165,6 +217,10 @@ public sealed class Compositor : IDisposable
         _srvCache.Clear();
         _rtv?.Dispose();
         Output?.Dispose();
+        _scaledSrcSrv?.Dispose();
+        _scaledRtv?.Dispose();
+        _scaled?.Dispose();
+        _linearSampler.Dispose();
         _rasterizer.Dispose();
         _blend.Dispose();
         _sampler.Dispose();

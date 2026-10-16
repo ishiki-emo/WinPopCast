@@ -2,8 +2,8 @@ using System.Diagnostics;
 using System.Text;
 using AppCapture.Core.Capture;
 using AppCapture.Core.Composition;
+using AppCapture.Core.Engine;
 using AppCapture.Core.Graphics;
-using AppCapture.Core.Timing;
 using AppCapture.Core.Tracking;
 using AppCapture.Spout;
 
@@ -59,22 +59,27 @@ await WindowCapture.RequestBorderlessAccessAsync();
 Log($"D3D11 OK, borderless={WindowCapture.IsBorderOptional}");
 
 using var sender = new SpoutSender(d3d, senderName);
-using var compositor = new Compositor(d3d);
-using var captures = new CaptureManager(d3d);
 Log($"Spout sender '{senderName}' @ {fps}fps");
+
+using var engine = new CaptureEngine(d3d, new EngineOptions
+{
+    Tracker = new TrackerOptions { ProcessNames = [processName] },
+    Fps = fps,
+    Canvas = canvasSpec,
+}, sender);
 
 // ウィンドウごとの記録（出現時刻・キャプチャ）。消えたときに開始遅延と表示時間を --measure に書き出す
 var records = new Dictionary<nint, WindowRecord>();
 using var measureLog = measurePath is null ? null : new StreamWriter(measurePath, append: false, new UTF8Encoding(false)) { AutoFlush = true };
 measureLog?.WriteLine("t_ms\tclass\ttitle\tsize\tlifetime_ms\tappear_to_start_ms\tstart_cost_ms\tstart_to_first_ms\tappear_to_first_ms\tmissed_pct\tframes");
 
-captures.CaptureStarted += (c, w) =>
+engine.Captures.CaptureStarted += (c, w) =>
 {
     lock (records) if (records.TryGetValue(c.Handle, out var r)) r.Capture = c;
     if (verbose) Log($"capture + {Describe(w)}");
 };
-captures.CaptureFailed += (w, ex) => Log($"capture failed {Describe(w)}: {ex.Message}");
-captures.FirstFrameArrived += c =>
+engine.Captures.CaptureFailed += (w, ex) => Log($"capture failed {Describe(w)}: {ex.Message}");
+engine.Captures.FirstFrameArrived += c =>
 {
     if (!verbose) return;
     WindowRecord? r;
@@ -100,9 +105,8 @@ void WriteMeasure(WindowRecord r, long goneTs)
         F(life), appearToStart, startCost, startToFirst, got ? F(appearToFirst) : "none", F(missed), c?.FrameCount ?? 0));
 }
 
-using var tracker = new WindowTracker(new TrackerOptions { ProcessNames = [processName] });
-tracker.TargetProcessesChanged += set => Log(set.Count == 0 ? $"{processName} 起動待ち" : $"{processName} PID: {string.Join(", ", set)}");
-tracker.SnapshotChanged += (now, prev, trigger) =>
+engine.Tracker.TargetProcessesChanged += set => Log(set.Count == 0 ? $"{processName} 起動待ち" : $"{processName} PID: {string.Join(", ", set)}");
+engine.BeforeSync += (now, _, trigger) =>
 {
     long appearTs = trigger != 0 ? trigger : now.Timestamp;
     var current = now.Windows.Select(w => w.Handle).ToHashSet();
@@ -117,77 +121,49 @@ tracker.SnapshotChanged += (now, prev, trigger) =>
             records.Remove(h);
         }
     }
-    captures.Sync(now);
 };
-tracker.Start();
-
-var exit = new CancellationTokenSource();
-Console.CancelKeyPress += (_, e) => { e.Cancel = true; exit.Cancel(); };
-
-var canvasSelector = new CanvasSelector(canvasSpec);
-using var pacer = new FramePacer(fps);
-var layers = new List<Layer>();
-RectI canvas = default;
-bool monitorMissing = false;
-long sent = 0, lastSent = 0, lastStats = Stopwatch.GetTimestamp();
-double renderMsTotal = 0;
-
-while (!exit.IsCancellationRequested)
+engine.CanvasChanged += canvas =>
 {
-    pacer.Wait();
-    var snapshot = tracker.Current;
-
-    var next = canvasSelector.Resolve(snapshot);
-    if (canvasSelector.MonitorMissing != monitorMissing)
+    var main = engine.Tracker.Current.FindMainWindow();
+    Log($"canvas {canvas} [{engine.Canvas}]" + (main is null ? "" : $" (main: {Describe(main)})"));
+};
+bool monitorMissing = false;
+engine.StatusUpdated += s =>
+{
+    if (s.CanvasMonitorMissing != monitorMissing)
     {
-        monitorMissing = canvasSelector.MonitorMissing;
+        monitorMissing = s.CanvasMonitorMissing;
         if (monitorMissing) Log($"モニター '{canvasSpec.Monitor}' が見つからないため、メインウィンドウのモニターを使います");
     }
-    if (next != canvas)
+};
+engine.Error += ex => Log($"error: {ex}");
+
+if (dumpPath is not null)
+{
+    // デバッグ: 起動 3 秒後の合成結果（プレビュー経路を原寸で使う）を PNG に保存
+    engine.PreviewMaxWidth = engine.PreviewMaxHeight = int.MaxValue;
+    engine.PreviewFps = 0.3;
+    var path = dumpPath;
+    engine.PreviewReady += f =>
     {
-        canvas = next;
-        var main = snapshot.FindMainWindow();
-        Log($"canvas {canvas} [{canvasSpec}]" + (main is null ? "" : $" (main: {Describe(main)})"));
-    }
-    if (canvas.IsEmpty) continue;
-
-    // 下（奥）から上（手前）へ。フレームが未着のウィンドウは描かない（映らない側に倒す）
-    var caps = new List<(TrackedWindow W, WindowCapture C)>();
-    for (int i = snapshot.Windows.Count - 1; i >= 0; i--)
-        if (captures.Get(snapshot.Windows[i].Handle) is { } c) caps.Add((snapshot.Windows[i], c));
-
-    long r0 = Stopwatch.GetTimestamp();
-    lock (d3d.Lock)
-    {
-        layers.Clear();
-        foreach (var (w, c) in caps)
-            if (c.Texture is { } tex)
-                layers.Add(new Layer(tex, w.Bounds.Left, w.Bounds.Top, c.ContentSize.Width, c.ContentSize.Height));
-
-        var output = compositor.Render(canvas, layers);
-        if (sender.Send(output)) sent++;
-
-        if (dumpPath is not null && Ms(Stopwatch.GetTimestamp() - t0) > 3000)
-        {
-            var (px, dw, dh) = TextureDump.Read(d3d, output);
-            var path = dumpPath;
-            dumpPath = null;
-            _ = TextureDump.SavePngAsync(px, dw, dh, path).ContinueWith(t => Log(t.IsFaulted ? $"dump failed: {t.Exception!.InnerException!.Message}" : $"dump saved: {path}"));
-        }
-    }
-    renderMsTotal += Ms(Stopwatch.GetTimestamp() - r0);
-
-    long now = Stopwatch.GetTimestamp();
-    if (now - lastStats >= Stopwatch.Frequency * 5)
-    {
-        double sec = Ms(now - lastStats) / 1000;
-        long n = sent - lastSent;
-        Log($"send {n / sec:F1}fps, render {(n > 0 ? renderMsTotal / n : 0):F2}ms, windows {snapshot.Windows.Count}, " +
-            $"captures {captures.Count}, mem {Environment.WorkingSet / 1024 / 1024}MB");
-        lastSent = sent; lastStats = now; renderMsTotal = 0;
-    }
+        if (Ms(Stopwatch.GetTimestamp() - t0) < 3000 || Interlocked.Exchange(ref path, null) is not { } p) return;
+        TextureDump.SavePngAsync(f.Pixels, f.Width, f.Height, p).ContinueWith(t =>
+            Log(t.IsFaulted ? $"dump failed: {t.Exception!.InnerException!.Message}" : $"dump saved: {p}"));
+    };
+    engine.PreviewEnabled = true;
 }
 
+var exit = new ManualResetEventSlim();
+Console.CancelKeyPress += (_, e) => { e.Cancel = true; exit.Set(); };
+engine.Start();
+
+// 5 秒ごとに状態を表示
+while (!exit.Wait(5000))
+{
+    if (engine.Status is { } s)
+        Log($"send {s.SendFps:F1}fps, render {s.RenderMs:F2}ms, windows {s.WindowCount}, captures {s.CaptureCount}, " +
+            $"mem {Environment.WorkingSet / 1024 / 1024}MB");
+}
 return 0;
 
 static void PrintMonitors()

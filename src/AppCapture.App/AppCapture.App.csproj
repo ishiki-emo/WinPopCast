@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>AppCapture.App</RootNamespace>
+    <AssemblyName>AppCapture</AssemblyName>
+    <UseWindowsForms>true</UseWindowsForms>
+    <!-- DPI 設定は manifest ではなく ApplicationHighDpiMode で行う（WinForms の推奨） -->
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\AppCapture.Core\AppCapture.Core.csproj" />
+    <ProjectReference Include="..\AppCapture.Spout\AppCapture.Spout.csproj" />
+  </ItemGroup>
+</Project>

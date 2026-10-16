@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/AppCapture.App/AppCapture.App.csproj" />
     <Project Path="src/AppCapture.Cli/AppCapture.Cli.csproj" />
     <Project Path="src/AppCapture.Core/AppCapture.Core.csproj" />
     <Project Path="src/AppCapture.Probe/AppCapture.Probe.csproj" />
