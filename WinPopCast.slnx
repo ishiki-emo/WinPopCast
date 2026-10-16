@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/WinPopCast.App/WinPopCast.App.csproj" />
+    <Project Path="src/WinPopCast.Cli/WinPopCast.Cli.csproj" />
+    <Project Path="src/WinPopCast.Core/WinPopCast.Core.csproj" />
+    <Project Path="src/WinPopCast.Probe/WinPopCast.Probe.csproj" />
+    <Project Path="src/WinPopCast.Spout/WinPopCast.Spout.csproj" />
+  </Folder>
+</Solution>

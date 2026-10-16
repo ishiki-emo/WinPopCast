@@ -26,7 +26,7 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: AppCapture-win-x64
+          name: WinPopCast-win-x64
           path: artifacts/*.zip
 
       - name: Release (tag)

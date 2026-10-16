@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>WinPopCast.App</RootNamespace>
+    <AssemblyName>WinPopCast</AssemblyName>
+    <UseWindowsForms>true</UseWindowsForms>
+    <!-- DPI 設定は manifest ではなく ApplicationHighDpiMode で行う（WinForms の推奨） -->
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\WinPopCast.Core\WinPopCast.Core.csproj" />
+    <ProjectReference Include="..\WinPopCast.Spout\WinPopCast.Spout.csproj" />
+  </ItemGroup>
+</Project>

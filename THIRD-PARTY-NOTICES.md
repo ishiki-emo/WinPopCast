@@ -1,6 +1,6 @@
 # Third-party notices
 
-AppCapture には次のソフトウェアが含まれています。
+WinPopCast には次のソフトウェアが含まれています。
 
 | ソフトウェア | ライセンス | 用途 |
 |---|---|---|

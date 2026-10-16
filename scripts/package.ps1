@@ -18,7 +18,7 @@ Set-Location $root
 [xml]$props = Get-Content Directory.Build.props
 $version = $props.Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
 $flavor = if ($FrameworkDependent) { "win-x64-fd" } else { "win-x64" }
-$name = "AppCapture-$version-$flavor"
+$name = "WinPopCast-$version-$flavor"
 $publishDir = Join-Path $root "artifacts/publish/$name"
 $zipPath = Join-Path $root "artifacts/$name.zip"
 
@@ -31,10 +31,10 @@ if (-not (Test-Path "$nativeBuild/CMakeCache.txt")) {
 cmake --build $nativeBuild --config Release
 if ($LASTEXITCODE) { throw "cmake build failed" }
 
-Write-Host "== AppCapture ($flavor) ==" -ForegroundColor Cyan
+Write-Host "== WinPopCast ($flavor) ==" -ForegroundColor Cyan
 if (Test-Path $publishDir) { Remove-Item -Recurse -Force $publishDir }
 $selfContained = if ($FrameworkDependent) { "false" } else { "true" }
-dotnet publish src/AppCapture.App/AppCapture.App.csproj -c Release -o $publishDir `
+dotnet publish src/WinPopCast.App/WinPopCast.App.csproj -c Release -o $publishDir `
     --self-contained $selfContained `
     -p:PublishSingleFile=true `
     -p:IncludeNativeLibrariesForSelfExtract=true `
@@ -45,10 +45,10 @@ if ($LASTEXITCODE) { throw "dotnet publish failed" }
 Copy-Item README.md, LICENSE, THIRD-PARTY-NOTICES.md $publishDir
 
 # 単一 exe にまとめきれなかったファイルが出ていないか確認する
-$extra = Get-ChildItem $publishDir -File | Where-Object { $_.Name -notin @("AppCapture.exe", "README.md", "LICENSE", "THIRD-PARTY-NOTICES.md") }
+$extra = Get-ChildItem $publishDir -File | Where-Object { $_.Name -notin @("WinPopCast.exe", "README.md", "LICENSE", "THIRD-PARTY-NOTICES.md") }
 if ($extra) { Write-Warning "単一 exe 以外のファイルがあります: $($extra.Name -join ', ')" }
 
 if (Test-Path $zipPath) { Remove-Item $zipPath }
 Compress-Archive -Path "$publishDir/*" -DestinationPath $zipPath
-$size = (Get-Item "$publishDir/AppCapture.exe").Length / 1MB
-Write-Host ("done: {0} (AppCapture.exe {1:F1} MB)" -f $zipPath, $size) -ForegroundColor Green
+$size = (Get-Item "$publishDir/WinPopCast.exe").Length / 1MB
+Write-Host ("done: {0} (WinPopCast.exe {1:F1} MB)" -f $zipPath, $size) -ForegroundColor Green

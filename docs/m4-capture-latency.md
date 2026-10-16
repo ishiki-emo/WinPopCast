@@ -1,6 +1,6 @@
 # M4 計測結果: WGC の開始遅延（Unity 6.3 LTS）
 
-`AppCapture.Cli --process Unity --measure <file>` で計測した（2026-10-16）。Unity でメニュー、ドロップダウン、カラーピッカーなどを開閉し、18 ウィンドウ分を記録した。
+`WinPopCast.Cli --process Unity --measure <file>` で計測した（2026-10-16）。Unity でメニュー、ドロップダウン、カラーピッカーなどを開閉し、18 ウィンドウ分を記録した。
 
 ## 結果
 

@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>WinPopCast.Cli</RootNamespace>
+    <ApplicationManifest>..\app.manifest</ApplicationManifest>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\WinPopCast.Core\WinPopCast.Core.csproj" />
+    <ProjectReference Include="..\WinPopCast.Spout\WinPopCast.Spout.csproj" />
+  </ItemGroup>
+</Project>

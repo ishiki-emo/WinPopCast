@@ -12,7 +12,7 @@
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
 
     <Version>0.1.0</Version>
-    <Product>AppCapture</Product>
+    <Product>WinPopCast</Product>
     <Authors>ishiki-emo</Authors>
     <Copyright>Copyright (c) 2026 ishiki-emo</Copyright>
     <Description>指定したアプリのウィンドウだけを合成して Spout2 で送るキャプチャツール</Description>

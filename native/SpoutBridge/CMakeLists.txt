@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(AppCaptureSpoutBridge LANGUAGES CXX)
+project(WinPopCastSpoutBridge LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -20,7 +20,7 @@ endif()
 set(SPOUTGL ${spout2_SOURCE_DIR}/SPOUTSDK/SpoutGL)
 set(SPOUTDX ${spout2_SOURCE_DIR}/SPOUTSDK/SpoutDirectX/SpoutDX)
 
-add_library(AppCaptureSpoutBridge SHARED
+add_library(WinPopCastSpoutBridge SHARED
   SpoutBridge.cpp
   ${SPOUTDX}/SpoutDX.cpp
   ${SPOUTGL}/SpoutCopy.cpp
@@ -30,7 +30,7 @@ add_library(AppCaptureSpoutBridge SHARED
   ${SPOUTGL}/SpoutSharedMemory.cpp
   ${SPOUTGL}/SpoutUtils.cpp
 )
-target_include_directories(AppCaptureSpoutBridge PRIVATE ${SPOUTDX} ${SPOUTGL})
-target_compile_options(AppCaptureSpoutBridge PRIVATE /utf-8 /W3)
-target_compile_definitions(AppCaptureSpoutBridge PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
-target_link_libraries(AppCaptureSpoutBridge PRIVATE d3d11 dxgi winmm shlwapi version)
+target_include_directories(WinPopCastSpoutBridge PRIVATE ${SPOUTDX} ${SPOUTGL})
+target_compile_options(WinPopCastSpoutBridge PRIVATE /utf-8 /W3)
+target_compile_definitions(WinPopCastSpoutBridge PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
+target_link_libraries(WinPopCastSpoutBridge PRIVATE d3d11 dxgi winmm shlwapi version)
