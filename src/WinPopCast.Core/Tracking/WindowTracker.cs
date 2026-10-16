@@ -39,6 +39,9 @@ public sealed class WindowTracker : IDisposable
     private readonly char[] _textBuffer = new char[512];
     private readonly Dictionary<int, string?> _processNameCache = [];
     private readonly Dictionary<nint, DialogState> _dialogs = [];
+    private readonly List<nint> _hooks = [];
+    private readonly HashSet<int> _hookedPids = [];
+    private bool _globalHookFallback;
     private readonly EnumWindowsProc _shellViewProc;
     private bool _shellViewFound;
 
@@ -96,18 +99,12 @@ public sealed class WindowTracker : IDisposable
 
     private void ThreadMain()
     {
-        var hooks = new List<nint>();
         try
         {
             _threadId = Kernel32.GetCurrentThreadId();
-            // 対象PIDが複数・可変で、許可リストで他プロセスの窓も拾うため、フックはグローバルにしてコールバック側で絞る
-            foreach (var (min, max) in HookRanges)
-            {
-                var h = User32.SetWinEventHook(min, max, 0, _winEventProc, 0, 0,
-                    User32.WINEVENT_OUTOFCONTEXT | User32.WINEVENT_SKIPOWNPROCESS);
-                if (h == 0) throw new InvalidOperationException($"SetWinEventHook failed for 0x{min:X4}-0x{max:X4}");
-                hooks.Add(h);
-            }
+            // 許可リストがあるときは他プロセスの窓も拾うので、システム全体にフックしてコールバック側で絞る。
+            // ないときは、対象プロセスが見つかってから PID ごとにフックする（UpdateProcessHooks）
+            if (_include.Count > 0) InstallHooks(0);
         }
         catch (Exception ex)
         {
@@ -122,7 +119,54 @@ public sealed class WindowTracker : IDisposable
         }
         finally
         {
-            foreach (var h in hooks) User32.UnhookWinEvent(h);
+            RemoveHooks();
+        }
+    }
+
+    /// <summary>pid = 0 ならシステム全体、それ以外はそのプロセスだけ</summary>
+    private void InstallHooks(int pid)
+    {
+        foreach (var (min, max) in HookRanges)
+        {
+            var h = User32.SetWinEventHook(min, max, 0, _winEventProc, (uint)pid, 0,
+                User32.WINEVENT_OUTOFCONTEXT | User32.WINEVENT_SKIPOWNPROCESS);
+            if (h == 0) throw new InvalidOperationException($"SetWinEventHook failed for 0x{min:X4}-0x{max:X4} (pid={pid})");
+            _hooks.Add(h);
+        }
+    }
+
+    private void RemoveHooks()
+    {
+        foreach (var h in _hooks) User32.UnhookWinEvent(h);
+        _hooks.Clear();
+    }
+
+    /// <summary>
+    /// 対象プロセスの起動・終了に合わせて、PID ごとのフックをかけ直す（トラッカーのスレッドで呼ぶ）。
+    /// 無関係なプロセスのイベント（マウス移動のたびの LOCATIONCHANGE など）を受けずに済む
+    /// </summary>
+    private void UpdateProcessHooks(HashSet<int> pids)
+    {
+        if (_include.Count > 0 || _globalHookFallback) return;
+        if (_hookedPids.SetEquals(pids)) return;
+        RemoveHooks();
+        _hookedPids.Clear();
+        try
+        {
+            foreach (var pid in pids)
+            {
+                InstallHooks(pid);
+                _hookedPids.Add(pid);
+            }
+        }
+        catch (Exception ex)
+        {
+            // PID ごとのフックに失敗したら、取りこぼさないようにシステム全体のフックに切り替える
+            RemoveHooks();
+            _hookedPids.Clear();
+            _globalHookFallback = true;
+            InstallHooks(0);
+            ReportError(ex);
         }
     }
 
@@ -218,6 +262,7 @@ public sealed class WindowTracker : IDisposable
         if (_targetPids is null || !pids.SetEquals(_targetPids))
         {
             _targetPids = pids;
+            UpdateProcessHooks(pids);
             _processNameCache.Clear(); // PID 再利用に備える
             _dirty = true;
             TargetProcessesChanged?.Invoke(pids);

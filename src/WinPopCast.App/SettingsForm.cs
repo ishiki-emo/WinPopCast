@@ -271,7 +271,7 @@ public sealed class SettingsForm : Form
         else if (s is null) text = "起動中…";
         else if (s.TargetProcessIds.Count == 0) text = $"{settings.ProcessName} の起動を待っています";
         else
-            text = $"送信中 '{settings.SenderName}'  {s.SendFps:F0}fps  ウィンドウ {s.WindowCount}  キャンバス {s.Canvas.Width}x{s.Canvas.Height}" +
+            text = $"送信中 '{settings.SenderName}'  更新 {s.SendFps:F0}/{s.TargetFps}fps  ウィンドウ {s.WindowCount}  キャンバス {s.Canvas.Width}x{s.Canvas.Height}" +
                 (s.CanvasMonitorMissing ? "（指定モニターが見つからないため自動）" : "");
         if (settings?.Include.Any(r => !r.IsValidInclude) == true) text += "\n※ 許可リストのうち、プロセス名がない行は無視しています";
         if (_controller.LastRecovery is { } rec) text += $"\nGPU のエラーから復帰しました（{rec:HH:mm:ss}、計 {_controller.RecoveryCount} 回）";
