@@ -23,13 +23,13 @@ public sealed class WindowCapture : IDisposable
     private SizeInt32 _poolSize;
     private bool _disposed;
 
-    private WindowCapture(D3DContext d3d, nint hwnd, GraphicsCaptureItem item)
+    private WindowCapture(D3DContext d3d, nint hwnd, GraphicsCaptureItem item, long startTimestamp)
     {
         _d3d = d3d;
         Handle = hwnd;
         _item = item;
         _poolSize = item.Size;
-        StartTimestamp = Stopwatch.GetTimestamp();
+        StartTimestamp = startTimestamp;
 
         _pool = Direct3D11CaptureFramePool.CreateFreeThreaded(
             d3d.WinRTDevice, DirectXPixelFormat.B8G8R8A8UIntNormalized, 2, _poolSize);
@@ -40,6 +40,7 @@ public sealed class WindowCapture : IDisposable
         _session.IsCursorCaptureEnabled = false;
         if (IsBorderOptional) _session.IsBorderRequired = false;
         _session.StartCapture();
+        StartedTimestamp = Stopwatch.GetTimestamp();
     }
 
     /// <summary>黄色い枠を消せる環境か（Windows 11 以降）</summary>
@@ -54,8 +55,11 @@ public sealed class WindowCapture : IDisposable
         catch { /* 古いビルドでは存在しない。枠が出るだけなので無視 */ }
     }
 
-    public static WindowCapture Start(D3DContext d3d, nint hwnd) =>
-        new(d3d, hwnd, CaptureInterop.CreateItemForWindow(hwnd));
+    public static WindowCapture Start(D3DContext d3d, nint hwnd)
+    {
+        long ts = Stopwatch.GetTimestamp();
+        return new(d3d, hwnd, CaptureInterop.CreateItemForWindow(hwnd), ts);
+    }
 
     public nint Handle { get; }
 
@@ -67,8 +71,11 @@ public sealed class WindowCapture : IDisposable
 
     public long FrameCount { get; private set; }
 
-    /// <summary>セッション開始時刻（Stopwatch）</summary>
+    /// <summary>Start を呼んだ時刻（Stopwatch）</summary>
     public long StartTimestamp { get; }
+
+    /// <summary>StartCapture から戻った時刻（Stopwatch）。StartTimestamp との差がセッション生成のコスト</summary>
+    public long StartedTimestamp { get; }
 
     /// <summary>最初のフレームが届いた時刻（Stopwatch）。0 なら未着</summary>
     public long FirstFrameTimestamp { get; private set; }

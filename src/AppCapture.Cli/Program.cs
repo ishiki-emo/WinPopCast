@@ -15,6 +15,7 @@ string? processName = null;
 string senderName = "AppCapture";
 int fps = 60;
 bool verbose = false;
+string? measurePath = null; // M4: ウィンドウごとの開始遅延を TSV に書く
 string? dumpPath = null; // デバッグ: 起動 3 秒後の合成結果を PNG に保存
 
 for (int i = 0; i < args.Length; i++)
@@ -27,6 +28,7 @@ for (int i = 0; i < args.Length; i++)
         case "--fps": fps = int.Parse(Next()); break;
         case "--verbose" or "-v": verbose = true; break;
         case "--dump": dumpPath = Next(); break;
+        case "--measure": measurePath = Next(); break;
         default: Console.Error.WriteLine($"不明な引数: {args[i]}"); return 1;
     }
 }
@@ -50,19 +52,62 @@ using var compositor = new Compositor(d3d);
 using var captures = new CaptureManager(d3d);
 Log($"Spout sender '{senderName}' @ {fps}fps");
 
-var windowInfo = new Dictionary<nint, TrackedWindow>();
-captures.CaptureStarted += (c, w) => { lock (windowInfo) windowInfo[c.Handle] = w; if (verbose) Log($"capture + {Describe(w)}"); };
+// ウィンドウごとの記録（出現時刻・キャプチャ）。消えたときに開始遅延と表示時間を --measure に書き出す
+var records = new Dictionary<nint, WindowRecord>();
+using var measureLog = measurePath is null ? null : new StreamWriter(measurePath, append: false, new UTF8Encoding(false)) { AutoFlush = true };
+measureLog?.WriteLine("t_ms\tclass\ttitle\tsize\tlifetime_ms\tappear_to_start_ms\tstart_cost_ms\tstart_to_first_ms\tappear_to_first_ms\tmissed_pct\tframes");
+
+captures.CaptureStarted += (c, w) =>
+{
+    lock (records) if (records.TryGetValue(c.Handle, out var r)) r.Capture = c;
+    if (verbose) Log($"capture + {Describe(w)}");
+};
 captures.CaptureFailed += (w, ex) => Log($"capture failed {Describe(w)}: {ex.Message}");
 captures.FirstFrameArrived += c =>
 {
-    TrackedWindow? w;
-    lock (windowInfo) windowInfo.TryGetValue(c.Handle, out w);
-    if (verbose) Log($"first frame {Ms(c.FirstFrameTimestamp - c.StartTimestamp),6:F1}ms [{w?.ClassName}] '{w?.Title}'");
+    if (!verbose) return;
+    WindowRecord? r;
+    lock (records) records.TryGetValue(c.Handle, out r);
+    string fromAppear = r is null ? "" : $" (出現から {Ms(c.FirstFrameTimestamp - r.AppearTimestamp):F1}ms)";
+    Log($"first frame {Ms(c.FirstFrameTimestamp - c.StartTimestamp),6:F1}ms{fromAppear} [{r?.Window.ClassName}] '{r?.Window.Title}'");
 };
+
+void WriteMeasure(WindowRecord r, long goneTs)
+{
+    if (measureLog is null) return;
+    var w = r.Window;
+    var c = r.Capture;
+    double life = Ms(goneTs - r.AppearTimestamp);
+    string F(double v) => v.ToString("F1");
+    string startCost = c is null ? "" : F(Ms(c.StartedTimestamp - c.StartTimestamp));
+    string appearToStart = c is null ? "" : F(Ms(c.StartTimestamp - r.AppearTimestamp));
+    bool got = c is not null && c.FirstFrameTimestamp != 0 && c.FirstFrameTimestamp < goneTs;
+    string startToFirst = got ? F(Ms(c!.FirstFrameTimestamp - c.StartTimestamp)) : "";
+    double appearToFirst = got ? Ms(c!.FirstFrameTimestamp - r.AppearTimestamp) : life;
+    double missed = life > 0 ? Math.Min(100, appearToFirst / life * 100) : 100;
+    measureLog.WriteLine(string.Join('\t', F(Ms(goneTs - t0)), w.ClassName, w.Title, $"{w.Bounds.Width}x{w.Bounds.Height}",
+        F(life), appearToStart, startCost, startToFirst, got ? F(appearToFirst) : "none", F(missed), c?.FrameCount ?? 0));
+}
 
 using var tracker = new WindowTracker(new TrackerOptions { ProcessNames = [processName] });
 tracker.TargetProcessesChanged += set => Log(set.Count == 0 ? $"{processName} 起動待ち" : $"{processName} PID: {string.Join(", ", set)}");
-tracker.SnapshotChanged += (now, _, _) => captures.Sync(now);
+tracker.SnapshotChanged += (now, prev, trigger) =>
+{
+    long appearTs = trigger != 0 ? trigger : now.Timestamp;
+    var current = now.Windows.Select(w => w.Handle).ToHashSet();
+    lock (records)
+    {
+        foreach (var w in now.Windows)
+            if (records.TryGetValue(w.Handle, out var r)) r.Window = w; // タイトル・サイズは最新を記録する
+            else records[w.Handle] = new WindowRecord(w, appearTs);
+        foreach (var h in records.Keys.Where(h => !current.Contains(h)).ToList())
+        {
+            WriteMeasure(records[h], appearTs);
+            records.Remove(h);
+        }
+    }
+    captures.Sync(now);
+};
 tracker.Start();
 
 var exit = new CancellationTokenSource();
@@ -129,3 +174,10 @@ while (!exit.IsCancellationRequested)
 }
 
 return 0;
+
+sealed class WindowRecord(TrackedWindow window, long appearTimestamp)
+{
+    public TrackedWindow Window { get; set; } = window;
+    public long AppearTimestamp { get; } = appearTimestamp;
+    public WindowCapture? Capture { get; set; }
+}
