@@ -7,13 +7,16 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: write # タグのプッシュ時にリリースの下書きを作るため
+
 jobs:
   build:
     runs-on: windows-2022
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "10.0.x"
 
@@ -21,14 +24,15 @@ jobs:
         shell: pwsh
         run: ./scripts/package.ps1
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: AppCapture-win-x64
           path: artifacts/*.zip
 
       - name: Release (tag)
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: artifacts/*.zip
           draft: true
+          generate_release_notes: true
