@@ -14,7 +14,7 @@ public sealed class AppSettings
     public int Fps { get; set; } = 60;
 
     /// <summary>CanvasSpec の文字列表現（auto / virtual / window / primary / デバイス名）</summary>
-    public string Canvas { get; set; } = "auto";
+    public string Canvas { get; set; } = "window";
 
     public List<WindowRule> Include { get; set; } = [];
 

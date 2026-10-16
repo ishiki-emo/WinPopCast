@@ -158,7 +158,7 @@ public sealed class SettingsForm : Form
         var s = _controller.Settings?.Clone() ?? new AppSettings();
         var name = _process.Text.Trim();
         s.ProcessName = name.Length == 0 ? null : Path.GetFileNameWithoutExtension(name);
-        s.Canvas = (_canvas.SelectedItem as CanvasItem)?.Value ?? "auto";
+        s.Canvas = (_canvas.SelectedItem as CanvasItem)?.Value ?? "window";
         s.Fps = (int)(_fps.SelectedItem ?? 60);
         s.SenderName = string.IsNullOrWhiteSpace(_sender.Text) ? "WinPopCast" : _sender.Text.Trim();
         s.Include = ReadRules(_include);
@@ -234,13 +234,13 @@ public sealed class SettingsForm : Form
     private void RefreshCanvasItems(string selected)
     {
         _canvas.Items.Clear();
-        _canvas.Items.Add(new CanvasItem("auto", "自動（メインウィンドウがあるモニター）"));
+        _canvas.Items.Add(new CanvasItem("window", "メインウィンドウの範囲（推奨）"));
+        _canvas.Items.Add(new CanvasItem("auto", "メインウィンドウがあるモニター"));
         _canvas.Items.Add(new CanvasItem("primary", "プライマリモニター"));
         foreach (var m in Monitors.GetAll())
             _canvas.Items.Add(new CanvasItem(m.DeviceName,
                 $"{m.DeviceName}  {m.Bounds.Width}x{m.Bounds.Height}  {m.Scale:P0}{(m.IsPrimary ? "（プライマリ）" : "")}"));
         _canvas.Items.Add(new CanvasItem("virtual", "全モニター（仮想デスクトップ）"));
-        _canvas.Items.Add(new CanvasItem("window", "メインウィンドウの範囲"));
 
         var match = _canvas.Items.Cast<CanvasItem>().FirstOrDefault(i => i.Value.Equals(selected, StringComparison.OrdinalIgnoreCase));
         if (match is null)

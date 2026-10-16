@@ -21,7 +21,8 @@ public enum CanvasMode
 /// </summary>
 public sealed record CanvasSpec(CanvasMode Mode, string? Monitor = null)
 {
-    public static CanvasSpec Default { get; } = new(CanvasMode.Auto);
+    /// <summary>既定はメインウィンドウの範囲（余白のない出力）。はみ出したポップアップは切れる</summary>
+    public static CanvasSpec Default { get; } = new(CanvasMode.MainWindow);
 
     public static CanvasSpec Parse(string s) => s.ToLowerInvariant() switch
     {
@@ -79,7 +80,9 @@ public sealed class CanvasSelector
 
         // メインウィンドウが一時的に見つからないときは直前のキャンバスを保つ（出力解像度を揺らさない）
         if (rect is { IsEmpty: false } r) _last = r;
-        else if (_last.IsEmpty) _last = _monitors.FirstOrDefault(m => m.IsPrimary)?.Bounds ?? default;
+        // まだ一度も決まっていなければプライマリモニターを仮に使う。ただしメインウィンドウの範囲モードでは、
+        // 窓が見つかるまで何も送らない（モニター全体の透明な映像を一瞬送って、出力の大きさが揺れるのを避ける）
+        else if (_last.IsEmpty && Spec.Mode != CanvasMode.MainWindow) _last = _monitors.FirstOrDefault(m => m.IsPrimary)?.Bounds ?? default;
         return _last;
 
         RectI? Fallback()

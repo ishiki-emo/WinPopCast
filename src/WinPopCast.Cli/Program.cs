@@ -7,7 +7,7 @@ using WinPopCast.Core.Graphics;
 using WinPopCast.Core.Tracking;
 using WinPopCast.Spout;
 
-// 対象プロセスの全ウィンドウを WGC でキャプチャし、キャンバス（既定はメインウィンドウのモニター）に Z 順で合成して Spout2 で送信する
+// 対象プロセスの全ウィンドウを WGC でキャプチャし、キャンバス（既定はメインウィンドウの範囲）に Z 順で合成して Spout2 で送信する
 
 Console.OutputEncoding = Encoding.UTF8;
 
@@ -43,7 +43,7 @@ if (processName is null)
         使い方: WinPopCast.Cli --process <名前> [オプション]
           --sender <名前>    Spout の送信者名（既定: WinPopCast）
           --fps <30|60>      出力フレームレート（既定: 60）
-          --canvas <指定>    auto（メインウィンドウのモニター、既定） / virtual（全モニター） / window（メインウィンドウの矩形）
+          --canvas <指定>    window（メインウィンドウの矩形、既定） / auto（メインウィンドウのモニター） / virtual（全モニター）
                              / primary / モニター番号（1〜） / デバイス名（\\.\DISPLAY2 など）
           --monitors         モニターの一覧を表示
           --show-file-dialogs 「ファイルを開く／保存」ダイアログも映す（既定では映さない）
